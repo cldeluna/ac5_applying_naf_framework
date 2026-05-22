@@ -1,0 +1,610 @@
+{
+  "schema_version": 28,
+  "standard_lib_version": 87,
+  "action_runtime_version": 72,
+  "name": "ACL Config Generator",
+  "description": "Generates Cisco ACL configurations from DNS/DHCP server IP lists. Supports both web form input (paste IPs) and webhook API (JSON). Output includes DNS, DHCP, SSH, HTTPS, ICMP rules with explicit deny.",
+  "guid": "8fa87ab09ca41c9821d37e0fba756b3c",
+  "slug": "acl_config_generator",
+  "agents": [
+    {
+      "type": "Agents::WebhookAgent",
+      "name": "Receive IP List",
+      "disabled": false,
+      "description": null,
+      "guid": "651cd5abae3a1c858b28698634326dd6",
+      "origin_story_identifier": "cloud:32fe9314839fbcf70621f74b47308e5d:8fa87ab09ca41c9821d37e0fba756b3c",
+      "options": {
+        "path": "559d42444bf9f59aaf21fc65777a2cf2",
+        "secret": "4942d70c4936345038993003302b1ff9",
+        "verbs": "get,post",
+        "response": "Received"
+      },
+      "reporting": {
+        "time_saved_value": 0,
+        "time_saved_unit": "minutes"
+      },
+      "monitoring": {
+        "monitor_all_events": false,
+        "monitor_failures": false,
+        "monitor_no_events_emitted": null
+      },
+      "template": {
+        "created_from_template_guid": null,
+        "created_from_template_version": null,
+        "template_tags": []
+      },
+      "width": null
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Build ACL Lines Per IP",
+      "disabled": false,
+      "description": null,
+      "guid": "9667f716ebe0a5ce834ea3304a65417b",
+      "origin_story_identifier": "cloud:32fe9314839fbcf70621f74b47308e5d:8fa87ab09ca41c9821d37e0fba756b3c",
+      "options": {
+        "mode": "message_only",
+        "loop": false,
+        "payload": {
+          "acl_header": "ip access-list extended FILTER-IN",
+          "deny_line": "  deny ip any any log",
+          "dns_ips": "=IF(IS_PRESENT(page_action.body.long_text), SPLIT(STRIP(page_action.body.long_text), \"\\n\"), receive_ip_list.body.dns_ips)",
+          "dns_lines": "=IF(IS_PRESENT(page_action.body.long_text), page_action.body.long_text, JOIN(receive_ip_list.body.dns_ips, \"\\n\"))",
+          "generated_at": "=DATE(\"now\", \"%Y-%m-%dT%H:%M:%SZ\", \"UTC\")",
+          "remark_deny": "  remark Explicit deny everything else",
+          "remark_dhcp": "  remark Allow DHCP (client <-> server)",
+          "remark_dns": "  remark Allow DNS (UDP/TCP 53) to DNS/DHCP servers",
+          "remark_icmp": "  remark Allow ICMP to the servers",
+          "remark_ssh": "  remark Allow SSH and HTTPS to the servers"
+        }
+      },
+      "reporting": {
+        "time_saved_value": 0,
+        "time_saved_unit": "minutes"
+      },
+      "monitoring": {
+        "monitor_all_events": false,
+        "monitor_failures": false,
+        "monitor_no_events_emitted": null
+      },
+      "template": {
+        "created_from_template_guid": null,
+        "created_from_template_version": null,
+        "template_tags": []
+      },
+      "width": null,
+      "schedule": null
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Render ACL Config",
+      "disabled": false,
+      "description": null,
+      "guid": "f26d3c8fd9bad537d208e58d12414948",
+      "origin_story_identifier": "cloud:32fe9314839fbcf70621f74b47308e5d:8fa87ab09ca41c9821d37e0fba756b3c",
+      "options": {
+        "mode": "message_only",
+        "loop": false,
+        "payload": {
+          "acl_output": "=APPEND(\"--- Generated ACL ---\\n\\n\", build_acl_lines_per_ip.acl_header, \"\\n\\n\", build_acl_lines_per_ip.remark_dns, \"\\n\", JOIN(MAP_LAMBDA(build_acl_lines_per_ip.dns_ips, LAMBDA(ip, APPEND(\"  permit udp any host \", ip, \" eq domain\\n  permit tcp any host \", ip, \" eq domain\"))), \"\\n\"), \"\\n\\n\", build_acl_lines_per_ip.remark_dhcp, \"\\n\", JOIN(MAP_LAMBDA(build_acl_lines_per_ip.dns_ips, LAMBDA(ip, APPEND(\"  permit udp any eq bootpc host \", ip, \" eq bootps\\n  permit udp host \", ip, \" eq bootps any eq bootpc\"))), \"\\n\"), \"\\n\\n\", build_acl_lines_per_ip.remark_ssh, \"\\n\", JOIN(MAP_LAMBDA(build_acl_lines_per_ip.dns_ips, LAMBDA(ip, APPEND(\"  permit tcp any host \", ip, \" eq 22\\n  permit tcp any host \", ip, \" eq 443\"))), \"\\n\"), \"\\n\\n\", build_acl_lines_per_ip.remark_icmp, \"\\n\", JOIN(MAP_LAMBDA(build_acl_lines_per_ip.dns_ips, LAMBDA(ip, APPEND(\"  permit icmp any host \", ip))), \"\\n\"), \"\\n\\n\", build_acl_lines_per_ip.remark_deny, \"\\n\", build_acl_lines_per_ip.deny_line)",
+          "dns_ips": "<<build_acl_lines_per_ip.dns_ips>>",
+          "generated_at": "<<build_acl_lines_per_ip.generated_at>>",
+          "source": "local file"
+        }
+      },
+      "reporting": {
+        "time_saved_value": 0,
+        "time_saved_unit": "minutes"
+      },
+      "monitoring": {
+        "monitor_all_events": false,
+        "monitor_failures": false,
+        "monitor_no_events_emitted": null
+      },
+      "template": {
+        "created_from_template_guid": null,
+        "created_from_template_version": null,
+        "template_tags": []
+      },
+      "width": null,
+      "schedule": null
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Send DNS IP configuration",
+      "disabled": false,
+      "description": null,
+      "guid": "ab546800924324180103214457d85857",
+      "origin_story_identifier": "cloud:32fe9314839fbcf70621f74b47308e5d:8fa87ab09ca41c9821d37e0fba756b3c",
+      "options": {
+        "url": "https://cool-firefly-7500.tines.com/webhook/acl-config-generator/<<CREDENTIAL.acl_webhook_secret>>",
+        "content_type": "application_json",
+        "method": "post",
+        "payload": {
+          "dns_ips": [
+            "10.10.10.10",
+            "10.10.10.11",
+            "10.10.10.12"
+          ]
+        }
+      },
+      "reporting": {
+        "time_saved_value": 0,
+        "time_saved_unit": "minutes"
+      },
+      "monitoring": {
+        "monitor_all_events": false,
+        "monitor_failures": false,
+        "monitor_no_events_emitted": null
+      },
+      "template": {
+        "created_from_template_guid": null,
+        "created_from_template_version": null,
+        "template_tags": []
+      },
+      "width": null,
+      "schedule": null
+    },
+    {
+      "type": "Agents::FormAgent",
+      "name": "Page action",
+      "disabled": false,
+      "description": null,
+      "guid": "e23518ef67bb77c555f6ed162d707c6d",
+      "origin_story_identifier": "cloud:32fe9314839fbcf70621f74b47308e5d:8fa87ab09ca41c9821d37e0fba756b3c",
+      "options": {
+        "fields": "",
+        "mode": "success_page",
+        "submissionMessage": "Thank you for your submission",
+        "visibility": "tenant",
+        "anonymize": false,
+        "auto_submit": false,
+        "page_logo": {
+          "contents": "iVBORw0KGgoAAAANSUhEUgAAAFQAAAAYCAYAAABk8drWAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAARCSURBVHgB7VhLctpAEB1k7LVyA/kEgRMEn8BQ5e8qcALjE1icAPsEkJW/VeATwA1QTmDlBCE7l3/kPblbTIiMJcVOeaFXBRrN9Mz0vOnu6ZExBQoUKFCgwAdByX4ZDAbuw8PDwWw2a+LVk+rAcZxgZWWl02g0QpMSl5eXXRlnvLq62kLfqcmIi4uLZqlU+lwulztJ/aGvJ/p+39nZ6cu8R3j30c/f3t7umP8MRwtXV1df7+/vb6iMmZNJVJ6enppom5ydnbVNCpAIjENZF786Fn1kMgLE1PDocRz0HyTJQKe2zNOjMbBO3o1sZgS2Ybw29KqYd0ZEKMg8AGl980zAS3BhqV0Sv0Qmsho8/iCQi5T6XED/WtJmoj7W9/b2Vgk9gXUGWM+JtoF4H/VdFEdK/HvB4UIxuZ+2A2SPlykFayLhXkJ9z/wDsJlHaTZld3fXR4ho7O3tHWudRbyrxC+Ca+L4rxFuyXlJ7c7j4yOtKcuuuXd3d+0XJvMkZPwFWpm4cV64sLTBawuGB/UYus7Pz7vUB3NOYLGxV+EsuIHrT2ydITNCn5/sxyfaKdO0x02Qo8wNY7Yt52ChmeOKraAN2ZxlyBxLZb6xFCuvxWN4UE361PGYYn1egli0KSQJxIy42VIfso959rCehplFOYYUkY0MCJvn68C5CDUJLi2ho7msExVa3Pk0QL9veJxIuZ3W0pkZIMNYR3GodSBjA3VVlsUAPK1HprCOuqoQpmHGRV3FzNfcQvZQpSx06YjcFx3fMW8E7mBK0W6egwEk+ObZKkjqIO0hR1Ih/0vfYeGhpmAwgLpUX4OkMQv7+/shCNV0i+GtBrlYX5Kn2QLjNTeCMVvby6KkZ7IhsF/E6jyTDhqDfZMBJAHzUHHGP1cOuR8mJ05PTz0zPzs2MfZM20BgLAfCXGzmEAYTWbN4YRPy3JQxNusauo1V3hF3yopg4T1TbISSB3nSKLhZgL6HLDN8oLxp3ga8vPSTfnD3MTcTzw1ypeHASI6NX88+5Jy1tTWmF1luMRw8voHIKeeZbHBTHGCJgGseW4dU7pySrm3m6w62trZa9o/kQcdrkTNwaw9c8fZVhcV+oqtb5FY0DDgSTw7TKgKT7+gkhH0jyQK6Tt4kG+7eMtmMIAasLj6ELULqtsfw8oJ1jdA+YGjgLYvvPCcoR84Yc63+UWiIxucf78HiSsuUZFvLTpgF73rzSAI3FMS0MnQJtUCSmD/KdwvdGFfyygnb5NZIBGI8ShzTpwnzUcpaWU2oh1p8ytOVmDIsxIlImOkB0w/9AGFDFhaabJhCmcNlH0zgYoGxXHKxHW451LSF86vXQPdQ6sYqy7BmhYlofs7NPpImaZumR5y3jzVvsFLI0nW6ko9WRG6oaVg0v/nA0JCwjHhx1aktw3jGA+yF8dykr2ZisRVsZLg4XpIcSGWOG+b5ilagQIECBZLxG5sJ41WbSDouAAAAAElFTkSuQmCC\n",
+          "display_logo": false,
+          "name": "nites.jpeg",
+          "type": "image/jpeg"
+        },
+        "page_width": "auto",
+        "pages_action_color": "#777FFF",
+        "pages_appearance_mode": "light",
+        "pages_background_color": "#F9F9F9",
+        "auto_close_tab_on_submit": false,
+        "url_identifier": "3ba894f6beeeef1a4f2be6bd904dd9cd"
+      },
+      "reporting": {
+        "time_saved_value": 0,
+        "time_saved_unit": "minutes"
+      },
+      "monitoring": {
+        "monitor_all_events": false,
+        "monitor_failures": false,
+        "monitor_no_events_emitted": null
+      },
+      "template": {
+        "created_from_template_guid": null,
+        "created_from_template_version": null,
+        "template_tags": []
+      },
+      "width": null
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Update note details",
+      "disabled": false,
+      "description": "Update a note in Tines.\n\nLink to documentation: https://www.tines.com/api/stories/notes/update",
+      "guid": "93c9a6002315baeba34bc48c5c902711",
+      "origin_story_identifier": "cloud:32fe9314839fbcf70621f74b47308e5d:8fa87ab09ca41c9821d37e0fba756b3c",
+      "options": {
+        "url": "https://<<INPUT.tenant_domain>>/api/v1/notes/<<INPUT.note_id>>",
+        "method": "put",
+        "headers": {
+          "Authorization": "Bearer <<INPUT.tines_credential>>"
+        },
+        "content_type": "application_json",
+        "payload": "=LOCAL.final_payload",
+        "local": {
+          "optional_parameters": {
+            "content": "<<INPUT.note_contents>>",
+            "position": "=IF(\n  AND(\n    IS_BLANK(INPUT.note_position_x_coordinates) = FALSE,\n    IS_BLANK(INPUT.note_position_y_coordinates) = FALSE\n  ),\n  {\n    \"x\": NUMBER(INPUT.note_position_x_coordinates),\n    \"y\": NUMBER(INPUT.note_position_y_coordinates)\n  },\n  NULL\n)"
+          },
+          "final_payload": "=REJECT(\n  LOCAL.optional_parameters,\n  LAMBDA(\n    item,\n    OR(\n      item = NULL,\n      IF(\n        OR(\n          TYPE(item) = \"TrueClass\",\n          TYPE(item) = \"FalseClass\",\n          TYPE(item) = \"Integer\"\n        ),\n        IS_EMPTY(TEXT(item)),\n        IS_EMPTY(item)\n      )\n    )\n  )\n)"
+        }
+      },
+      "reporting": {
+        "time_saved_value": 0,
+        "time_saved_unit": "minutes"
+      },
+      "monitoring": {
+        "monitor_all_events": false,
+        "monitor_failures": false,
+        "monitor_no_events_emitted": null
+      },
+      "template": {
+        "created_from_template_guid": "c692a33157aff0499042f377c73402636fdf0d0487957a1bfd07bc6ec99874a8",
+        "created_from_template_version": null,
+        "template_tags": []
+      },
+      "width": null,
+      "schedule": null
+    }
+  ],
+  "diagram_notes": [
+    {
+      "content": "--- Generated ACL ---\n\nip access-list extended FILTER-IN\n\n  remark Allow DNS (UDP/TCP 53) to DNS/DHCP servers\n  permit udp any host 1.1.1.1 eq domain\n  permit tcp any host 1.1.1.1 eq domain\n  permit udp any host 2.2.2.2 eq domain\n  permit tcp any host 2.2.2.2 eq domain\n  permit udp any host 3.3.3.3 eq domain\n  permit tcp any host 3.3.3.3 eq domain\n\n  remark Allow DHCP (client <-> server)\n  permit udp any eq bootpc host 1.1.1.1 eq bootps\n  permit udp host 1.1.1.1 eq bootps any eq bootpc\n  permit udp any eq bootpc host 2.2.2.2 eq bootps\n  permit udp host 2.2.2.2 eq bootps any eq bootpc\n  permit udp any eq bootpc host 3.3.3.3 eq bootps\n  permit udp host 3.3.3.3 eq bootps any eq bootpc\n\n  remark Allow SSH and HTTPS to the servers\n  permit tcp any host 1.1.1.1 eq 22\n  permit tcp any host 1.1.1.1 eq 443\n  permit tcp any host 2.2.2.2 eq 22\n  permit tcp any host 2.2.2.2 eq 443\n  permit tcp any host 3.3.3.3 eq 22\n  permit tcp any host 3.3.3.3 eq 443\n\n  remark Allow ICMP to the servers\n  permit icmp any host 1.1.1.1\n  permit icmp any host 2.2.2.2\n  permit icmp any host 3.3.3.3\n\n  remark Explicit deny everything else\n  deny ip any any log",
+      "position": [
+        690,
+        240
+      ],
+      "guid": "8fec4c45c2adc0463cbb81d9e0a96a4b",
+      "width": 290
+    },
+    {
+      "content": "# ACL Config Generator\n\nThis story generates Cisco ACL configurations from a list of DNS/DHCP server IPs.\n\n## Two Input Methods:\n\n### 1. Web Form (Page Action)\n- Visit the page URL\n- Paste IPs in the text field (one per line)\n- Click Submit\n\n### 2. Webhook API\n- POST to the webhook URL\n- Send JSON: `{\"dns_ips\": [\"ip1\", \"ip2\", ...]}`\n- Requires ACL_WEBHOOK_SECRET credential\n\n## Output\nThe generated ACL config includes:\n- DNS (UDP/TCP port 53)\n- DHCP (client ↔ server)\n- SSH (port 22) and HTTPS (port 443)\n- ICMP\n- Explicit deny all",
+      "position": [
+        -510,
+        -120
+      ],
+      "guid": "1657f8e1f10a03ff8c7fc5561ca449eb",
+      "width": 280
+    },
+    {
+      "content": "## Web Form Input\n\n**Page URL:** Click the page action to get the URL\n\n**Format:** One IP address per line\n\nExample:\n```\n192.168.10.10\n192.168.10.11\n192.168.10.12\n```",
+      "position": [
+        -210,
+        -90
+      ],
+      "guid": "c5a775feac8db54a4866224389507f9a",
+      "width": 250
+    },
+    {
+      "content": "## Webhook Input\n\n**Webhook URL:** Click the webhook action to get the URL\n\n**Method:** POST\n\n**Headers:**\n- `Content-Type: application/json`\n\n**Body:**\n```json\n{\n  \"dns_ips\": [\n    \"192.168.10.10\",\n    \"192.168.10.11\",\n    \"192.168.10.12\"\n  ]\n}\n```",
+      "position": [
+        705,
+        -210
+      ],
+      "guid": "5966c17486a1e5f86b0b352a8a1ba094",
+      "width": 250
+    }
+  ],
+  "links": [
+    {
+      "source": 0,
+      "receiver": 1
+    },
+    {
+      "source": 1,
+      "receiver": 2
+    },
+    {
+      "source": 2,
+      "receiver": 5
+    },
+    {
+      "source": 4,
+      "receiver": 1
+    }
+  ],
+  "diagram_layout": "{\"651cd5abae3a1c858b28698634326dd6\":[375,120],\"93c9a6002315baeba34bc48c5c902711\":[375,465],\"9667f716ebe0a5ce834ea3304a65417b\":[375,255],\"ab546800924324180103214457d85857\":[375,-30],\"e23518ef67bb77c555f6ed162d707c6d\":[60,-45],\"f26d3c8fd9bad537d208e58d12414948\":[375,390]}",
+  "story_library_metadata": {},
+  "monitor_failures": false,
+  "synchronous_webhooks_enabled": false,
+  "integrations": [
+    {
+      "action_inputs": [
+        {
+          "name": "Tenant domain",
+          "description": "The domain of the tenant.",
+          "required": true,
+          "type": "TEXT",
+          "ranking": 0,
+          "value": "\"<<META.tenant.domain>>\"",
+          "options": [
+            "Option 1",
+            "Option 2"
+          ],
+          "is_collapsed": false,
+          "sub_type": "HTML",
+          "multi_select_enabled": false,
+          "llm_json_schema": "{}"
+        },
+        {
+          "name": "Note ID",
+          "description": "The ID of the note you are updating. You can identify this in the URL of the storyboard by selecting the note.",
+          "required": true,
+          "type": "NUMBER",
+          "ranking": 1,
+          "value": "222380",
+          "options": [
+            "Option 1",
+            "Option 2"
+          ],
+          "is_collapsed": false,
+          "sub_type": "HTML",
+          "multi_select_enabled": false,
+          "llm_json_schema": "{}"
+        },
+        {
+          "name": "Tines credential",
+          "description": "",
+          "required": false,
+          "type": "CREDENTIAL",
+          "ranking": 2,
+          "value": "\"=CREDENTIAL.tines\"",
+          "options": [
+            "Option 1",
+            "Option 2"
+          ],
+          "is_collapsed": false,
+          "sub_type": "HTML",
+          "multi_select_enabled": false,
+          "llm_json_schema": "{}"
+        },
+        {
+          "name": "Note contents",
+          "description": "Update the note [markdown](https://www.markdownguide.org/basic-syntax/) formatted content.",
+          "required": false,
+          "type": "TEXT",
+          "ranking": 1073741826,
+          "value": "\"<<render_acl_config.acl_output>>\"",
+          "options": [
+            "Option 1",
+            "Option 2"
+          ],
+          "is_collapsed": false,
+          "sub_type": "HTML",
+          "multi_select_enabled": false,
+          "llm_json_schema": "{}"
+        },
+        {
+          "name": "Note position X coordinates",
+          "description": "The X coordinates for the location of the note on the storyboard. If selected, you must also include the Y coordinates input.",
+          "required": false,
+          "type": "NUMBER",
+          "ranking": 4,
+          "value": "\"\"",
+          "options": [
+            "Option 1",
+            "Option 2"
+          ],
+          "is_collapsed": true,
+          "sub_type": "HTML",
+          "multi_select_enabled": false,
+          "llm_json_schema": "{}"
+        },
+        {
+          "name": "Note position Y coordinates",
+          "description": "The Y coordinates for the location of the note on the storyboard. If selected, you must also include the X coordinates input.",
+          "required": false,
+          "type": "NUMBER",
+          "ranking": 5,
+          "value": "\"\"",
+          "options": [
+            "Option 1",
+            "Option 2"
+          ],
+          "is_collapsed": true,
+          "sub_type": "HTML",
+          "multi_select_enabled": false,
+          "llm_json_schema": "{}"
+        }
+      ],
+      "action_guid": "93c9a6002315baeba34bc48c5c902711",
+      "product": "Tines",
+      "action_options_keys": []
+    }
+  ],
+  "sections": [
+    {
+      "name": "Input Methods",
+      "color": "blue",
+      "position": [
+        45,
+        -120
+      ],
+      "guid": "df8f6dc939469d765faf6fda0da6e6a0",
+      "width": 600,
+      "height": 450
+    },
+    {
+      "name": "ACL Generation",
+      "color": "green",
+      "position": [
+        330,
+        75
+      ],
+      "guid": "1d498bfb239238399b16fbe698fc9c7e",
+      "width": 345,
+      "height": 450
+    }
+  ],
+  "parent_only_send_to_story": false,
+  "send_to_story_timeout_enabled": false,
+  "send_to_story_timeout_duration_seconds": null,
+  "keep_events_for": 86400,
+  "reporting_status": true,
+  "send_to_story_enabled": false,
+  "entry_agent_guid": null,
+  "exit_agent_guids": [],
+  "api_entry_action_guids": [],
+  "api_exit_action_guids": [],
+  "send_to_story_access": null,
+  "send_to_story_access_source": 0,
+  "send_to_story_skill_use_requires_confirmation": true,
+  "pages": [
+    {
+      "containers": [
+        {
+          "guid": "4815396aa55b394161c6fef12f237d37",
+          "ranking": 0,
+          "category": 0,
+          "name": "Container",
+          "layout": "vertical",
+          "alignment": "no_alignment",
+          "loop": "",
+          "spacing": "no_spacing",
+          "user_driven_loop": false
+        },
+        {
+          "guid": "b7fc96859702b739899d652b28588e70",
+          "ranking": 1,
+          "category": 0,
+          "name": "Container",
+          "layout": "vertical",
+          "alignment": "no_alignment",
+          "loop": "",
+          "spacing": "no_spacing",
+          "user_driven_loop": false
+        },
+        {
+          "guid": "543a7dbe70d0df61cd1c4cfcb4b1674b",
+          "ranking": 2,
+          "category": 0,
+          "name": "Container",
+          "layout": "vertical",
+          "alignment": "no_alignment",
+          "loop": "",
+          "spacing": "no_spacing",
+          "user_driven_loop": false
+        }
+      ],
+      "conditions": [],
+      "fields": [
+        {
+          "guid": "cec2d13c5e1a9fb311d6b974f2c70ca9",
+          "name": "Heading",
+          "description": "",
+          "required": false,
+          "type": "TITLE",
+          "multi_select": false,
+          "options": [
+            "Option 1",
+            "Option 2"
+          ],
+          "ranking": 0,
+          "max_characters": null,
+          "default_value": null,
+          "content": "ACL Config",
+          "validation_pattern": null,
+          "validation_error_message": null,
+          "style": "primary",
+          "container_guid": "4815396aa55b394161c6fef12f237d37",
+          "graph_type": 0,
+          "graph_direction": "HORIZONTAL",
+          "date_mode": "DATE",
+          "store_value_as": "=password_value",
+          "allow_table_row_selection": false,
+          "is_searchable": false,
+          "height": null,
+          "image_fit": "CONTAIN",
+          "min_value": 0,
+          "max_value": 100,
+          "step": 1,
+          "width": "AUTO",
+          "width_type": "FLEX_WIDTH",
+          "width_fixed_px": 0,
+          "boolean_label_true": "Yes",
+          "boolean_label_false": "No"
+        },
+        {
+          "guid": "79b8676625bda9c94185af4026fe6d06",
+          "name": "Long text",
+          "description": "One IP per a line",
+          "required": false,
+          "type": "LONG_TEXT",
+          "multi_select": false,
+          "options": [
+            "Option 1",
+            "Option 2"
+          ],
+          "ranking": 0,
+          "max_characters": null,
+          "default_value": null,
+          "content": null,
+          "validation_pattern": null,
+          "validation_error_message": null,
+          "style": "primary",
+          "container_guid": "b7fc96859702b739899d652b28588e70",
+          "graph_type": 0,
+          "graph_direction": "HORIZONTAL",
+          "date_mode": "DATE",
+          "store_value_as": "=password_value",
+          "allow_table_row_selection": false,
+          "is_searchable": false,
+          "height": null,
+          "image_fit": "CONTAIN",
+          "min_value": 0,
+          "max_value": 100,
+          "step": 1,
+          "width": "AUTO",
+          "width_type": "FLEX_WIDTH",
+          "width_fixed_px": 0,
+          "boolean_label_true": "Yes",
+          "boolean_label_false": "No"
+        },
+        {
+          "guid": "31c1b16419c091f7bd0bcdca153146d4",
+          "name": "Button",
+          "description": "",
+          "required": false,
+          "type": "BUTTON",
+          "multi_select": false,
+          "options": [
+            "Option 1",
+            "Option 2"
+          ],
+          "ranking": 0,
+          "max_characters": null,
+          "default_value": null,
+          "content": "Submit",
+          "validation_pattern": null,
+          "validation_error_message": null,
+          "style": "primary",
+          "container_guid": "543a7dbe70d0df61cd1c4cfcb4b1674b",
+          "graph_type": 0,
+          "graph_direction": "HORIZONTAL",
+          "date_mode": "DATE",
+          "store_value_as": "=password_value",
+          "allow_table_row_selection": false,
+          "is_searchable": false,
+          "height": null,
+          "image_fit": "CONTAIN",
+          "min_value": 0,
+          "max_value": 100,
+          "step": 1,
+          "width": "AUTO",
+          "width_type": "FLEX_WIDTH",
+          "width_fixed_px": 0,
+          "boolean_label_true": "Yes",
+          "boolean_label_false": "No"
+        }
+      ],
+      "visibility": "tenant",
+      "agent_guid": "e23518ef67bb77c555f6ed162d707c6d",
+      "success_message": "Thank you for your submission",
+      "loading_message": "",
+      "logo_contents": "iVBORw0KGgoAAAANSUhEUgAAAFQAAAAYCAYAAABk8drWAAAACXBIWXMAAAsT\nAAALEwEAmpwYAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAARCSURB\nVHgB7VhLctpAEB1k7LVyA/kEgRMEn8BQ5e8qcALjE1icAPsEkJW/VeATwA1Q\nTmDlBCE7l3/kPblbTIiMJcVOeaFXBRrN9Mz0vOnu6ZExBQoUKFCgwAdByX4Z\nDAbuw8PDwWw2a+LVk+rAcZxgZWWl02g0QpMSl5eXXRlnvLq62kLfqcmIi4uL\nZqlU+lwulztJ/aGvJ/p+39nZ6cu8R3j30c/f3t7umP8MRwtXV1df7+/vb6iM\nmZNJVJ6enppom5ydnbVNCpAIjENZF786Fn1kMgLE1PDocRz0HyTJQKe2zNOj\nMbBO3o1sZgS2Ybw29KqYd0ZEKMg8AGl980zAS3BhqV0Sv0Qmsho8/iCQi5T6\nXED/WtJmoj7W9/b2Vgk9gXUGWM+JtoF4H/VdFEdK/HvB4UIxuZ+2A2SPlykF\nayLhXkJ9z/wDsJlHaTZld3fXR4ho7O3tHWudRbyrxC+Ca+L4rxFuyXlJ7c7j\n4yOtKcuuuXd3d+0XJvMkZPwFWpm4cV64sLTBawuGB/UYus7Pz7vUB3NOYLGx\nV+EsuIHrT2ydITNCn5/sxyfaKdO0x02Qo8wNY7Yt52ChmeOKraAN2ZxlyBxL\nZb6xFCuvxWN4UE361PGYYn1egli0KSQJxIy42VIfso959rCehplFOYYUkY0M\nCJvn68C5CDUJLi2ho7msExVa3Pk0QL9veJxIuZ3W0pkZIMNYR3GodSBjA3VV\nlsUAPK1HprCOuqoQpmHGRV3FzNfcQvZQpSx06YjcFx3fMW8E7mBK0W6egwEk\n+ObZKkjqIO0hR1Ih/0vfYeGhpmAwgLpUX4OkMQv7+/shCNV0i+GtBrlYX5Kn\n2QLjNTeCMVvby6KkZ7IhsF/E6jyTDhqDfZMBJAHzUHHGP1cOuR8mJ05PTz0z\nPzs2MfZM20BgLAfCXGzmEAYTWbN4YRPy3JQxNusauo1V3hF3yopg4T1TbISS\nB3nSKLhZgL6HLDN8oLxp3ga8vPSTfnD3MTcTzw1ypeHASI6NX88+5Jy1tTWm\nF1luMRw8voHIKeeZbHBTHGCJgGseW4dU7pySrm3m6w62trZa9o/kQcdrkTNw\naw9c8fZVhcV+oqtb5FY0DDgSTw7TKgKT7+gkhH0jyQK6Tt4kG+7eMtmMIAas\nLj6ELULqtsfw8oJ1jdA+YGjgLYvvPCcoR84Yc63+UWiIxucf78HiSsuUZFvL\nTpgF73rzSAI3FMS0MnQJtUCSmD/KdwvdGFfyygnb5NZIBGI8ShzTpwnzUcpa\nWU2oh1p8ytOVmDIsxIlImOkB0w/9AGFDFhaabJhCmcNlH0zgYoGxXHKxHW45\n1LSF86vXQPdQ6sYqy7BmhYlofs7NPpImaZumR5y3jzVvsFLI0nW6ko9WRG6o\naVg0v/nA0JCwjHhx1aktw3jGA+yF8dykr2ZisRVsZLg4XpIcSGWOG+b5ilag\nQIECBZLxG5sJ41WbSDouAAAAAElFTkSuQmCC\n",
+      "logo_filename": "nites.jpeg",
+      "display_logo": false,
+      "icon": ":date:",
+      "sso_groups": null,
+      "display_mode": "bordered",
+      "app": null
+    }
+  ],
+  "tags": [],
+  "time_saved_unit": "minutes",
+  "time_saved_value": 0,
+  "origin_story_identifier": "cloud:32fe9314839fbcf70621f74b47308e5d:8fa87ab09ca41c9821d37e0fba756b3c",
+  "recipients": [
+    "sifbaksh@gmail.com"
+  ],
+  "integration_product": null,
+  "integration_vendor": null,
+  "llm_product_instructions": "",
+  "start_reference": null,
+  "send_to_stories": [],
+  "exported_at": "2026-03-26T00:10:57Z",
+  "icon": ":soap:"
+}
