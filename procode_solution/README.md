@@ -64,13 +64,59 @@ CLAB_PASSWORD=<clab_ssh_password>
 
 ---
 
+## Device Role Resolution
+
+The solution must know which devices are Layer 3 (eligible for SVI ACL updates) and which are not. It supports two methods, applied in order:
+
+### Method 1 — Explicit `role` field in `inventory.yml` (preferred)
+
+```yaml
+UWACO_PacificHQ:
+  - hostname: pacific-cs01
+    address: 10.1.10.50
+    role: core
+  - hostname: seaofcortez-sw01
+    address: 10.1.10.66
+    role: access
+```
+
+Valid L3 roles: `core`, `distribution`, `spine`, `leaf`
+Non-L3 roles (skipped): `access`, `firewall`, `wlc`
+
+### Method 2 — Hostname naming convention inference (fallback)
+
+If a device has no `role` field, the role is inferred from the hostname using a prioritised set of regex patterns:
+
+| Pattern | Inferred Role | Example |
+|---------|--------------|---------|
+| `-cs` + digit | `core` | `pacific-cs01` |
+| `-ds` + digit | `distribution` | `pacific-ds01` |
+| `-as` + digit | `access` | `celebessea-as01` |
+| `-sw` + digit | `access` | `seaofcortez-sw01` |
+| `-fwl` | `firewall` | `pacific-fwl01` |
+| `-wlc` | `wlc` | `arctic-wlc01` |
+| `spine` | `spine` | `sea-dc-spine1` |
+| `leaf` | `leaf` | `sea-dc-leaf1` |
+| `core` | `core` | `core1` |
+| `dist` | `distribution` | `dist1` |
+| `-c` + digit | `core` | `lax-c01` |
+| `-d` + digit | `distribution` | `lax-d01` |
+| `-a` + digit | `access` | `lax-a01` |
+| `-f` + digit | `firewall` | `lax-f01` |
+
+Two-letter suffix patterns are checked before single-letter patterns to prevent `pacific-cs01` from being misidentified by the `-c` rule.
+
+When inference is used, an `INFO` line is logged. Devices that match no pattern are included with a `WARNING` and flagged for inventory cleanup.
+
+---
+
 ## Assumptions
 
 - **ContainerLab is available** for Step 7 lab validation. The `CLAB_*` environment variables must be set and the ContainerLab node must be running before execution. If the variables are absent, Step 7 is skipped with a warning and the operator is prompted to validate manually.
 - **Cisco IOS target devices** — all production devices are assumed to be `cisco_ios` Netmiko device type. No multi-vendor support is implemented.
 - **Data SVIs are identified by description** — any VLAN interface with the word `data` (case-insensitive) in its description is treated as a Data SVI. This convention must be maintained in device configurations.
 - **At least one SVI already has an ACL** — the workflow is designed to *update* an existing policy, not introduce one for the first time. At least one Data SVI at the target location must already have an inbound or outbound ACL applied.
-- **Device inventory has explicit `role` fields** — `inventory.yml` must include a `role` key for each device. Devices without a role field are included with a warning.
+- **Inventory role field or consistent naming convention** — `inventory.yml` should include a `role` field per device. If absent, the hostname must follow a recognisable convention (see Device Role Resolution above). Devices that match neither will be included with a warning.
 - **SSH reachability** — devices are assumed to be reachable on the configured SSH port. There is no pre-flight ping or connectivity check.
 - **Credentials are consistent across a location** — a single username/password pair is used for all production devices at a location. Per-device credentials are not supported.
 - **ACL names are the standard** — the solution enforces `BASIC_DATA_SRVC_IN` (inbound) and `BASIC_DATA_SRVC_OUT` (outbound) as the canonical names. Any deviation is treated as technical debt to be corrected.
@@ -88,18 +134,19 @@ CLAB_PASSWORD=<clab_ssh_password>
 | No Data SVIs found | Abort with list of all SVIs found for operator review |
 | No SVI has any pre-existing ACL | Abort — adding an ACL to a previously unconstrained interface is high-risk |
 | Non-standard ACL names found | Logged clearly as technical debt removal before the push proceeds |
+| Only pushes to discovered SVIs | ACL config is only applied to interfaces returned by `show running-config | section interface Vlan` in Step 5 — we can never target a non-existent VLAN |
 | ContainerLab push failure | Operator is prompted to continue or abort before production push |
 | No changes detected after push | Rollback prompt is suppressed — "rollback not applicable" is printed |
 | Per-device no-diff on rollback | That device is skipped automatically within the rollback loop |
 | SSH/connection error per device | Error is captured in the result dict and printed; loop continues to remaining devices |
 | aerleon build failure | `RuntimeError` raised with exit code and stderr output |
+| No role field in inventory | Role is inferred from hostname; `INFO` logged if L3, `WARNING` if unrecognisable |
 
 ### What We Are NOT Checking (Known Gaps)
 
 - **No pre-flight reachability test** — if a device is unreachable, the workflow discovers this at SSH connection time, not before.
 - **No IOS version or platform validation** — `cisco_ios` device type is assumed for all devices; no check is performed.
 - **No ACL semantic validation** — the generated ACL is pushed as-is with no check for duplicate entries, conflicting rules, or inadvertent permit-any-any.
-- **No VLAN existence check** — `interface VlanX` commands are pushed without verifying the VLAN is defined on the device.
 - **Steps 9 and 11 are stubs** — `verify_scope()` and `save_scope()` write placeholder output but do not perform real post-change verification or `write memory` via Netmiko. Both are marked `TODO`.
 - **No automatic rollback on failed push** — if a device fails mid-push, the operator must intervene manually. The rollback offer only appears after a successful push completes.
 - **No partial-scope retry** — if some devices fail and others succeed, there is no mechanism to retry only the failed devices.
@@ -126,7 +173,7 @@ Build a Python CLI script (`update_basic_srvs_pol.py`) that automates the full A
 
 **Inputs**
 
-- `inventory.yml` — YAML file mapping location names to lists of devices, each with `hostname`, `address`, and `role` fields.
+- `inventory.yml` — YAML file mapping location names to lists of devices, each with `hostname`, `address`, and optional `role` fields.
 - `acl_aerleon/def/*.yaml` — YAML definition files containing `networks` (DNS_SERVERS, DHCP_SERVERS, WEB_SERVERS, RFC1918) and policy metadata (`scope`, `service_impact`).
 - `templates/basic_services_acl.j2` — Jinja2 template that renders the ACL from the definitions.
 - `.env` — environment file with SSH credentials and ContainerLab connection details.
@@ -135,19 +182,25 @@ Build a Python CLI script (`update_basic_srvs_pol.py`) that automates the full A
 
 Two ACLs are managed: `BASIC_DATA_SRVC_IN` (inbound) and `BASIC_DATA_SRVC_OUT` (outbound). These names are constants. Any SVI found with a different ACL name is treated as non-standard; the standard names are applied and the replacement is logged as technical debt removal.
 
+**Device Role Resolution**
+
+Devices are filtered to L3 roles only (`core`, `distribution`, `spine`, `leaf`). Role is resolved in two ways:
+1. Explicit `role` field in `inventory.yml` (preferred).
+2. Regex inference from hostname using a prioritised pattern list (`_HOSTNAME_ROLE_PATTERNS`), ordered from most-specific (two-letter suffixes like `-cs`, `-ds`, `-sw`) to least-specific (single-letter suffixes like `-c`, `-d`). Log `INFO` when inference is used. Log `WARNING` when no pattern matches (device included by default).
+
 **Device Targeting**
 
-Only devices with `role` in `{core, distribution, spine, leaf}` are included. Within those devices, only VLAN interfaces with the word `data` (case-insensitive) in their description are targeted. The workflow aborts if no Data SVIs exist or if none have a pre-existing ACL.
+Only L3 devices (by role resolution above) are included. Within those devices, only VLAN interfaces with the word `data` (case-insensitive) in their description are targeted. Target interfaces are discovered dynamically in Step 5 from the device's running config — no interface targeting is hard-coded. The workflow aborts if no Data SVIs exist or if none have a pre-existing ACL.
 
 **Workflow Steps**
 
 1. Parse CLI args: positional `location`, `--engine {jinja2,aerleon}`, `--dry-run`, `--username`, `--password`.
-2. Load inventory, filter to L3 devices for the given location, log skipped non-L3 devices.
+2. Load inventory, resolve device roles (explicit or inferred), filter to L3 devices, log skipped non-L3 devices.
 3. Generate ACL artifact via Jinja2 template render or aerleon `aclgen` subprocess.
 4. Quantify impact by reading `scope` and `service_impact` from YAML definitions.
 5. Capture pre-change state via Netmiko: `show running-config | section interface Vlan` to find Data SVIs and their current ACL names; `show ip access-lists <name>` for each ACL found. Save snapshot JSON and per-device rollback ACL text files. Accepts `port` parameter.
 6. Generate change record text file with scope, impact, device list, Data SVIs, and ACL artifact.
-7. Generate ContainerLab single-node topology YAML for a representative L3 device (prefer core > distribution > spine by `role` field). Connect to the clab node via Netmiko on `CLAB_PORT`: capture pre-state, push config, capture post-state, diff. If no changes detected, suppress rollback prompt. Otherwise offer rollback.
+7. Generate ContainerLab single-node topology YAML for a representative L3 device (prefer core > distribution > spine, using role field or hostname inference). Connect to the clab node via Netmiko on `CLAB_PORT`: capture pre-state, push config, capture post-state, diff. If no changes detected, suppress rollback prompt. Otherwise offer rollback.
 8. Push to all production L3 devices via Netmiko using the same pre/push/post/diff function (`push_and_verify_device`). Store `pre_config` (running-config section per ACL) for rollback. Offer rollback if changes detected; suppress prompt if none.
 9. Capture post-change state and diff against pre-change snapshot (stub, extendable).
 10. Check ACL hit counters via `show ip access-lists` on all devices. Accepts `port` parameter.
@@ -182,7 +235,7 @@ Only devices with `role` in `{core, distribution, spine, leaf}` are included. Wi
 | `modules/save.py` | Save running config to startup (`write memory`) |
 | `modules/impact.py` | Load YAML definitions, quantify impact, format summary |
 | `modules/change_record.py` | Generate change record text file |
-| `modules/containerlab.py` | Topology YAML generation, representative device selection by role |
+| `modules/containerlab.py` | Topology YAML generation, representative device selection by role or hostname inference |
 
 **Coding Constraints**
 
