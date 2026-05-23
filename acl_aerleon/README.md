@@ -2,12 +2,14 @@
 
 ## What This Directory Is
 
-This directory holds the **network policy intent** for the Basic Data Services ACL workflow. It is shared across all solution variants in this repository (pro code, low code, no code, AI) and is intentionally kept at the repository root so that every solution reads from the same single source.
+This directory holds the **network policy intent** for the Basic Data Services ACL workflow. It was initially shared across all solution variants in this repository (pro code, low code, no code, AI) and kept at the repository root so every solution read from the same single source.
 
-It serves two purposes:
+> **Going forward, [InfraHub](https://www.opsmill.com/infrahub/) is the designated source of truth for IP address data in this repository.** The `def/` YAML files remain in place as the policy template layer and for the Jinja2/aerleon artifact engines, but the authoritative records for DNS servers, DHCP servers, and other network objects will be held and queried from InfraHub.
+
+This directory serves two purposes:
 
 1. **Policy generation** — the `def/` YAML files are read by the Jinja2 template engine or passed to the `aerleon` ACL compiler to produce the actual IOS ACL configuration that gets pushed to devices.
-2. **Source of truth** — the `def/` files are the authoritative record of *which servers are permitted* by the policy. When a DHCP or DNS server is added or decommissioned, this is the file that changes first. That change, committed to Git, is Step 1 of the workflow.
+2. **Source of truth (historical / fallback)** — the `def/` files were the authoritative record of *which servers are permitted* by the policy. With InfraHub adoption, Step 1 of the workflow becomes: update the InfraHub object, and the automation queries InfraHub at runtime to populate the network groups.
 
 ---
 
@@ -73,17 +75,18 @@ The same YAML files, but stored in a location that non-engineers can access and 
 
 A dedicated system designed to hold network data authoritatively:
 
-| Platform | Best for |
-|---|---|
-| **NetBox / Nautobot** | IP addresses, prefixes, VLANs, devices, services — the most common open-source choice for network teams |
-| **Infoblox / BlueCat** | DNS and DHCP records specifically; if Infoblox is already the authoritative DHCP/DNS system, the server list should come from here |
-| **Cisco NSO** | Service models and device configuration intent, especially in Cisco-heavy environments |
+| Platform | Best for | Notes |
+|---|---|---|
+| **InfraHub** (OpsMill) | IP addresses, prefixes, devices, services — graph-based SoT with Git-like version control, schema validation, and a GraphQL API | **Designated SoT for this repository going forward.** Combines the auditability of Git with the queryability of a proper SoT platform. |
+| **NetBox / Nautobot** | IP addresses, prefixes, VLANs, devices, services — the most common open-source choice for network teams | Mature ecosystem, REST and GraphQL APIs |
+| **Infoblox / BlueCat** | DNS and DHCP records specifically; if Infoblox is already the authoritative DHCP/DNS system, the server list should come from here | Authoritative for DNS/DHCP if already deployed |
+| **Cisco NSO** | Service models and device configuration intent, especially in Cisco-heavy environments | Best when devices are already managed via NSO |
 
-With a proper SoT, Step 1 of the workflow becomes: *update NetBox* (or Infoblox, or NSO). The automation then queries the SoT API at runtime and the YAML files in this directory are no longer needed.
+With a proper SoT, Step 1 of the workflow becomes: *update the SoT* (add the new DHCP server in InfraHub, NetBox, or Infoblox). The automation then queries the SoT API at runtime and the YAML files in this directory are no longer the authoritative source.
 
-**Integration change:** Replace `impact.load_definitions()` with an API client that queries the appropriate endpoint and returns the same dict structure. Everything downstream stays the same.
+**Integration change:** Replace `impact.load_definitions()` with an API client that queries the appropriate endpoint and returns the same dict structure. For InfraHub, this means a GraphQL query against the InfraHub API to retrieve the relevant IP address objects and populate `DNS_SERVERS`, `DHCP_SERVERS`, and `WEB_SERVERS` network groups. Everything downstream stays the same.
 
-**Use when:** Your organisation already has NetBox, Infoblox, or a similar platform, or is ready to invest in one. This is the target state for mature network automation.
+**Use when:** Your organisation already has one of these platforms or is ready to invest in one. This is the target state for mature network automation. For this repository, InfraHub is the designated target.
 
 ---
 
@@ -97,10 +100,14 @@ For organisations with a mature IT service management practice, configuration it
 
 ## The Right Answer for Your Organisation
 
-There is no universally correct answer. The decision depends on:
+There is no universally correct answer — but for this project, the direction is clear.
 
-- **Who is authoritative** for DNS/DHCP server records in your organisation? If it is the DNS team using Infoblox, the data should come from Infoblox. If it is a network engineer maintaining a spreadsheet, YAML under version control is already a significant improvement.
-- **What tooling already exists?** Do not build a NetBox deployment just to serve this use case unless there is broader organisational value.
-- **What is the cost of stale data?** If the YAML file is not updated when a server changes, the next ACL push will either miss a new server or retain a decommissioned one. How often does this data change, and how quickly must the ACL reflect it?
+**For this repository:** InfraHub is the designated source of truth for IP address data. The YAML files in `def/` remain as the policy template layer (they define the structure that aerleon and Jinja2 use), but the IP addresses themselves will be sourced from InfraHub via its GraphQL API. The single integration point to update is `load_definitions()` in `modules/impact.py`.
 
-The YAML-in-Git approach used here is a deliberate choice for a team getting started: **low infrastructure cost, full auditability, directly automation-friendly**. As automation maturity grows and a proper SoT platform is adopted, the `load_definitions()` function in `modules/impact.py` is the single integration point to replace.
+**For your organisation more broadly**, the decision depends on:
+
+- **Who is authoritative** for DNS/DHCP server records? If it is the DNS team using Infoblox, the data should come from Infoblox. If it is a network engineer maintaining a spreadsheet, YAML under version control is already a significant improvement.
+- **What tooling already exists?** Do not deploy InfraHub or NetBox just to serve this one use case unless there is broader organisational value.
+- **What is the cost of stale data?** If the YAML file is not updated when a server changes, the next ACL push will either miss a new server or retain a decommissioned one. A live SoT API eliminates this risk entirely.
+
+The YAML-in-Git approach documented here represents the **starting point**: low infrastructure cost, full auditability, directly automation-friendly. InfraHub represents the **next step**: all of those properties plus a live queryable API, schema-enforced data quality, and a purpose-built interface for the people who own the data.
