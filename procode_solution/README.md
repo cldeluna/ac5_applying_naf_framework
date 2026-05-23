@@ -390,16 +390,18 @@ The diagram below illustrates the full 12-step workflow. Paste the fenced code b
 
 ```mermaid
 flowchart TD
+    classDef human fill:#FFD700,stroke:#FF8C00,color:#000000,font-weight:bold
+
     subgraph SOT["Source of Truth — acl_aerleon/def/"]
         DNS["dns.yaml — DNS_SERVERS"]
         DHCP["dhcp.yaml — DHCP_SERVERS"]
         DEFS["definitions.yaml — WEB_SERVERS, RFC1918\nscope, service_impact"]
     end
 
-    EVT([Service Event]) --> COMMIT["Step 1\nGit commit to acl_aerleon/def/"]
-    COMMIT --> RUN["Step 2\npython update_basic_srvs_pol.py\n--location LOCATION"]
-
-    RUN --> ENG{"--engine?"}
+    H1(["👤 Update DNS/DHCP server IPs\nin acl_aerleon/def/ — commit to Git"]):::human
+    H1 --> COMMIT["Step 1\nGit commit to acl_aerleon/def/"]
+    COMMIT --> H2(["👤 Execute script from CLI\npython update_basic_srvs_pol.py\n--location LOCATION"]):::human
+    H2 --> ENG{"--engine?"}
     SOT -->|load_definitions| ENG
     ENG -->|"jinja2 (default)"| J2["Jinja2 render\nbasic_services_acl.j2"]
     ENG -->|aerleon| AER["aclgen subprocess\nbasic_services_monolithic.pol.yaml"]
@@ -409,39 +411,43 @@ flowchart TD
     ACL --> IMP["Step 4 — Quantify Impact\nscope + service_impact fields"]
     IMP --> STATE["Step 5 — Pre-change State\nNetmiko: show run | section Vlan\nshow ip access-lists per L3 device"]
     STATE --> CR["Step 6 — Change Record\ntimestamped .txt file"]
+    CR --> H3(["👤 Create change ticket in ServiceNow\nSet to Approved / Scheduled state"]):::human
 
-    CR --> DRY{"--dry-run?"}
+    H3 --> DRY{"--dry-run?"}
     DRY -->|yes| STOP([Exit])
     DRY -->|no| CLAB
 
     subgraph LAB["Step 7 — ContainerLab Validation"]
         CLAB["Build topology YAML\nConnect via CLAB_PORT\npush_and_verify_device()"]
-        CD{"Changes\ndetected?"}
-        CR7["Rollback\nrestore pre_config"]
+        CD{"clab changes\ndetected?"}
+        CR7["Rollback clab\nrestore pre_config"]
         CLAB --> CD
-        CD -->|"yes + operator: rollback"| CR7
     end
 
     CD -->|no changes| PUSH
-    CD -->|"yes + operator: continue"| PUSH
+    CD -->|yes| H4(["👤 Review clab diff\nApprove to proceed or rollback?"]):::human
+    H4 -->|rollback| CR7
+    H4 -->|approve| PUSH
     CR7 --> PUSH
 
     subgraph PROD["Step 8 — Production Push"]
         PUSH["push_and_verify_device()\nper L3 device — sequential"]
-        PD{"Changes\ndetected?"}
+        PD{"prod changes\ndetected?"}
         PR["Per-device rollback\nrestore / replace / remove ACL\nidempotency: skip if no diff"]
         PUSH --> PD
-        PD -->|"yes + operator: rollback"| PR
     end
 
     PD -->|no changes| VER
-    PD -->|"yes + operator: continue"| VER
+    PD -->|yes| H5(["👤 Review production diffs\nApprove or rollback per device?"]):::human
+    H5 -->|rollback| PR
+    H5 -->|approve| VER
     PR --> VER
 
     VER["Step 9 — Verify Scope (stub)"]
     VER --> TEST["Step 10 — Test ACL Counters\nshow ip access-lists all devices"]
     TEST --> SAVE["Step 11 — Save to Startup\nwrite memory (stub)"]
     SAVE --> OUT["Step 12 — Consolidated Output\npush_record.json\nticket_notes.txt"]
+    OUT --> H6(["👤 Close change ticket\nAttach artifacts from output/"]):::human
 ```
 
 ---
@@ -537,18 +543,23 @@ COLUMN COLORS (use these exact hex values):
 - EXECUTOR:      background #7030A0, white text
 
 STEP-TO-BLOCK MAPPING (filled = colored cell with tool icon/name, empty = gray dot):
+Human interaction steps are marked with 👤 — show a human icon badge on those rows.
+
+👤 PRE-STEP 1 | Human updates DNS/DHCP IPs in acl_aerleon/def/ and commits to Git
 Step 1  | Document Change Scope      | Git commit to acl_aerleon/def/      | PRESENTATION ● INTENT ●
-Step 2  | Trigger Workflow            | Python script (argparse CLI)         | PRESENTATION ● ORCHESTRATION ●
+👤 Step 2  | Trigger Workflow        | Human runs: python update_basic_srvs_pol.py | PRESENTATION ● ORCHESTRATION ●
 Step 3  | Build ACL Artifact          | Python + Jinja2 or aerleon aclgen   | PRESENTATION ● ORCHESTRATION ● INTENT ●
 Step 4  | Quantify Impact             | Python reads definitions.yaml        | OBSERVABILITY ● ORCHESTRATION ●
 Step 5  | Check Current State         | Netmiko SSH (show commands)          | OBSERVABILITY ● ORCHESTRATION ● COLLECTOR ●
 Step 6  | Create Change Record        | Python generates .txt file           | PRESENTATION ● ORCHESTRATION ● INTENT ●
-Step 7  | Lab Validation (Scale=1)    | ContainerLab + Netmiko              | ORCHESTRATION ● INTENT ● COLLECTOR ● EXECUTOR ●
-Step 8  | Push Update to Scope        | Netmiko send_config_set             | ORCHESTRATION ● EXECUTOR ●
+👤 POST-STEP 6 | Human creates change ticket in ServiceNow and sets it to Approved/Scheduled
+👤 Step 7  | Lab Validation (Scale=1)| ContainerLab + Netmiko; Human approves or rolls back | ORCHESTRATION ● INTENT ● COLLECTOR ● EXECUTOR ●
+👤 Step 8  | Push Update to Scope    | Netmiko send_config_set; Human approves or rolls back per device | ORCHESTRATION ● EXECUTOR ●
 Step 9  | Verify Changes              | Netmiko post-change capture (stub)  | OBSERVABILITY ● ORCHESTRATION ● COLLECTOR ● EXECUTOR ●
 Step 10 | Test Across Scope           | Netmiko show ip access-lists         | OBSERVABILITY ● ORCHESTRATION ● COLLECTOR ● EXECUTOR ●
 Step 11 | Save / Commit Scope         | Netmiko write memory (stub)         | ORCHESTRATION ● EXECUTOR ●
 Step 12 | Final Record Updates        | Python JSON + txt output             | PRESENTATION ● ORCHESTRATION ● EXECUTOR ●
+👤 POST-STEP 12 | Human closes change ticket and attaches push_record.json + ticket_notes.txt
 
 ADDITIONAL STYLE NOTES:
 - Add a caption below the table: "Tool icons indicate which component provides the framework block capability for that workflow step."
@@ -557,4 +568,5 @@ ADDITIONAL STYLE NOTES:
 - Filled cells should use the column's background color with a white or light tool indicator
 - The left step column has a white background with the step number in a small gray circle
 - Overall table has a light gray border and clean sans-serif font
+- HUMAN TOUCHPOINTS: Add a 👤 person icon badge to the LEFT of the step number for every row that requires human action. Human steps are: Pre-Step 1 (update def/ files), Step 2 (run script), Post-Step 6 (create ticket), Step 7 (approve/rollback decision), Step 8 (approve/rollback decision), Post-Step 12 (close ticket). Use a gold/amber background (#FFD700) for the human icon badge. The pre- and post-step human actions can be shown as thin banner rows between the numbered steps in a light gold color with the 👤 icon and a brief action description, no block columns filled.
 ```
