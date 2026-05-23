@@ -64,6 +64,94 @@ CLAB_PASSWORD=<clab_ssh_password>
 
 ---
 
+## Source of Truth — `acl_aerleon/`
+
+The `acl_aerleon/` directory lives at the **repository root** (one level above `procode_solution/`) and is the single source of truth for all ACL content. It is shared across all solution types (pro code, low code, no code, AI). Every service change that triggers a workflow run starts here — **Step 1 is a Git commit to this directory**.
+
+### Directory Structure
+
+```
+acl_aerleon/
+  def/
+    definitions.yaml          # RFC1918, WEB_SERVERS, scope, service_impact, etc.
+    dhcp.yaml                 # DHCP_SERVERS network group + DHCP service ports
+    dns.yaml                  # DNS_SERVERS network group + DNS service ports
+  policies/
+    pol/
+      basic_services_monolithic.pol.yaml   # aerleon policy — all definitions inline
+      basic_services_includes.pol.yaml     # aerleon policy — uses $include refs to def/
+      dhcp.pol.yaml
+      dns.pol.yaml
+    basic_services_monolithic.pol.acl      # generated ACL output (checked in)
+    basic_services_includes.pol.acl
+```
+
+### Making a Service Change (Step 1)
+
+When a service dependency changes, edit the appropriate `def/` file and commit to Git before running the workflow:
+
+| Change event | File to edit | What to update |
+|---|---|---|
+| New DNS server added | `acl_aerleon/def/dns.yaml` | Add entry under `networks.DNS_SERVERS.values` |
+| DNS server decommissioned | `acl_aerleon/def/dns.yaml` | Remove the entry |
+| New DHCP server added | `acl_aerleon/def/dhcp.yaml` | Add entry under `networks.DHCP_SERVERS.values` |
+| DHCP server decommissioned | `acl_aerleon/def/dhcp.yaml` | Remove the entry |
+| New web server | `acl_aerleon/def/definitions.yaml` | Add entry under `networks.WEB_SERVERS.values` |
+
+Example — adding a new DHCP server to `dhcp.yaml`:
+
+```yaml
+networks:
+  DHCP_SERVERS:
+    values:
+      - address: 10.0.0.7/32
+        comment: DHCP Server 1
+      - address: 10.0.0.8/32
+        comment: DHCP Server 2
+      - address: 10.0.0.9/32        # <-- new server added here
+        comment: DHCP Server 3
+```
+
+### How Each Artifact Engine Uses These Files
+
+**`--engine jinja2` (default)**
+
+`build_artifact_jinja2()` calls `impact.load_definitions()`, which merges all `def/*.yaml` files into a single dict. It then extracts `DNS_SERVERS`, `DHCP_SERVERS`, and `WEB_SERVERS` network groups and renders `templates/basic_services_acl.j2` directly. The def/ YAML files are the only input — no aerleon tooling is required.
+
+```
+def/dns.yaml ──┐
+def/dhcp.yaml ─┼──> load_definitions() ──> Jinja2 render ──> ACL artifact string
+def/definitions.yaml ─┘
+```
+
+**`--engine aerleon`**
+
+`build_artifact_aerleon()` runs `aclgen` as a subprocess, pointing it at `policies/pol/basic_services_monolithic.pol.yaml`. The policy file embeds all network and service definitions inline, but references the same address values that originate from `def/`. After `aclgen` runs, the generated `.acl` file is read and returned as the artifact string. Requires `aclgen` to be installed (`uv run aclgen` or `pip install aerleon`).
+
+```
+policies/pol/basic_services_monolithic.pol.yaml ──> aclgen subprocess ──> .acl file ──> artifact string
+```
+
+> **Note:** The `basic_services_includes.pol.yaml` variant uses `$include` references that point back to `def/` directly, so it stays in sync automatically. The `monolithic` variant has definitions duplicated inline and must be kept in sync manually when `def/` files are updated.
+
+### Scope and Impact Fields (Step 4)
+
+`definitions.yaml` also carries two metadata blocks used in Step 4 (Quantify Impact) and the change record:
+
+```yaml
+scope:
+  BASIC_SERVICES_POLICY:
+    - All Data SVIs on Core or Distribution Switches at a location
+
+service_impact:
+  BASIC_SERVICES_POLICY:
+    - Can impact WEB, DNS, DHCP services across all Data SVIs at a location.
+```
+
+These are read by `impact.quantify_impact()` and `impact.format_impact_summary()`, and included in both the Step 6 change record text and the Step 12 ticket narrative.
+
+---
+
 ## Device Role Resolution
 
 The solution must know which devices are Layer 3 (eligible for SVI ACL updates) and which are not. It supports two methods, applied in order:
