@@ -1,0 +1,106 @@
+---
+LAX_Campus:
+  - hostname: lax-a01
+    address: 172.20.20.14
+    role: access
+  - hostname: lax-a02
+    address: 172.20.20.15
+    role: access
+  - hostname: lax-a03
+    address: 172.20.20.16
+    role: access
+  - hostname: lax-a04
+    address: 172.20.20.17
+    role: access
+  - hostname: lax-c01
+    address: 172.20.20.10
+    role: core
+  - hostname: lax-d01
+    address: 172.20.20.11
+    role: distribution
+  - hostname: lax-d02
+    address: 172.20.20.12
+    role: distribution
+  - hostname: lax-f01
+    address: 172.20.20.13
+    role: firewall
+
+SEA_DataCenter:
+  - hostname: sea-dc-leaf1
+    address: 172.20.20.103
+    role: leaf
+  - hostname: sea-dc-leaf2
+    address: 172.20.20.104
+    role: leaf
+  - hostname: sea-dc-leaf3
+    address: 172.20.20.105
+    role: leaf
+  - hostname: sea-dc-leaf4
+    address: 172.20.20.106
+    role: leaf
+  - hostname: sea-dc-spine1
+    address: 172.20.20.101
+    role: spine
+  - hostname: sea-dc-spine2
+    address: 172.20.20.102
+    role: spine
+
+SFO_Campus:
+  - hostname: access1
+    address: 172.20.20.22
+    role: access
+  - hostname: core1
+    address: 172.20.20.20
+    role: core
+  - hostname: dist1
+    address: 172.20.20.21
+    role: distribution
+
+UWACO_PacificHQ:
+  - hostname: amundsensea-sw01
+    address: 10.1.10.67
+    role: access
+  - hostname: arctic-wlc01
+    address: 10.1.10.109
+    role: wlc
+  - hostname: beringsea-sw01
+    address: 10.1.10.63
+    role: access
+  - hostname: celebessea-as01
+    address: 10.1.10.61
+    role: access
+  - hostname: coralsea-sw01
+    address: 10.1.10.65
+    role: access
+  - hostname: pacific-cs01
+    address: 10.1.10.50
+    role: core
+  - hostname: pacific-ds01
+    address: 10.1.10.60
+    role: distribution
+  - hostname: pacific-fwl01
+    address: 10.1.10.51
+    role: firewall
+  - hostname: pacific-wlc01
+    address: 10.1.10.55
+    role: wlc
+  - hostname: seaofcortez-sw01
+    address: 10.1.10.66
+    role: access
+  - hostname: solomonsea-sw01
+    address: 10.1.10.62
+    role: access
+  - hostname: tasmansea-sw01
+    address: 10.1.10.69
+    role: access
+
+UWACO_PacificHQ_TEST:
+  - hostname: pacific-cs01
+    address: 10.1.10.50
+    role: core
+  - hostname: pacific-ds01
+    address: 10.1.10.60
+    role: distribution
+  - hostname: seaofcortez-sw01
+    address: 10.1.10.66
+    role: access
