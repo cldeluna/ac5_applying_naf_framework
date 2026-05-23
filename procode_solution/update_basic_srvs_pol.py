@@ -19,6 +19,7 @@ import ipaddress
 import jinja2
 import json
 import os
+import re
 import subprocess
 import sys
 import yaml
@@ -44,6 +45,24 @@ OUTPUT_DIR = os.path.join(_HERE, "output")
 ACL_NAME = "BASIC_DATA_SRVC_IN"
 ACL_NAME_OUT = "BASIC_DATA_SRVC_OUT"
 L3_ROLES = {"core", "distribution", "spine", "leaf"}
+
+_HOSTNAME_ROLE_PATTERNS = [
+    (r"-cs\d", "core"),
+    (r"-ds\d", "distribution"),
+    (r"-as\d", "access"),
+    (r"-sw\d", "access"),
+    (r"-fwl", "firewall"),
+    (r"-wlc", "wlc"),
+    (r"spine", "spine"),
+    (r"leaf", "leaf"),
+    (r"core", "core"),
+    (r"dist", "distribution"),
+    (r"access", "access"),
+    (r"-c\d", "core"),
+    (r"-d\d", "distribution"),
+    (r"-a\d", "access"),
+    (r"-f\d", "firewall"),
+]
 
 
 def build_apply_commands(svis: list[dict]) -> str:
@@ -150,14 +169,33 @@ def load_inventory(inventory_file: str) -> dict:
         return yaml.safe_load(fh) or {}
 
 
+def infer_role_from_hostname(hostname: str) -> str:
+    """Infer device role from hostname naming convention.
+
+    Used as a fallback when a device in inventory.yml has no 'role' field.
+    Patterns are checked in order from most specific to least specific.
+
+    Args:
+        hostname: Device hostname string.
+
+    Returns:
+        Role string (e.g. 'core', 'distribution', 'access') or 'unknown'.
+    """
+    h = hostname.lower()
+    for pattern, role in _HOSTNAME_ROLE_PATTERNS:
+        if re.search(pattern, h):
+            return role
+    return "unknown"
+
+
 def get_devices(inventory: dict, location: str) -> list[dict]:
     """Return only L3 devices for a given namespace/location.
 
-    Filters to devices whose 'role' is in L3_ROLES (core, distribution,
-    spine, leaf).  Devices with no role field default to 'unknown' and
-    are included with a warning so inventories without roles still work.
-    Access switches, firewalls, WLCs and other non-L3 devices are skipped
-    and logged to stdout.
+    Filters to devices whose role is in L3_ROLES (core, distribution,
+    spine, leaf).  Role is taken from the explicit 'role' field in
+    inventory.yml when present; otherwise it is inferred from the hostname
+    using _HOSTNAME_ROLE_PATTERNS.  Devices whose role cannot be determined
+    are included with a warning.  Non-L3 devices are skipped and logged.
 
     Args:
         inventory: Full inventory dict.
@@ -178,18 +216,27 @@ def get_devices(inventory: dict, location: str) -> list[dict]:
     l3_devices = []
     skipped = []
     for device in all_devices:
-        role = device.get("role", "unknown")
-        if role in L3_ROLES:
+        explicit_role = device.get("role", "")
+        if explicit_role:
+            effective_role = explicit_role
+            role_source = "inventory"
+        else:
+            effective_role = infer_role_from_hostname(device["hostname"])
+            role_source = "inferred"
+        if effective_role in L3_ROLES:
+            if role_source == "inferred":
+                print(f"  INFO: {device['hostname']}: no 'role' field — role '{effective_role}' inferred from hostname.")
             l3_devices.append(device)
-        elif role == "unknown":
-            print(f"  WARNING: {device['hostname']} has no role field — including by default.")
+        elif effective_role == "unknown":
+            print(f"  WARNING: {device['hostname']}: no role field and hostname gives no clue — including by default.")
             l3_devices.append(device)
         else:
-            skipped.append(device)
+            skipped.append((device, effective_role, role_source))
     if skipped:
         print(f"\nSkipping {len(skipped)} non-L3 device(s) at {location} (not eligible for SVI ACL updates):")
-        for d in skipped:
-            print(f"  - {d['hostname']} (role: {d.get('role', 'unknown')})")
+        for d, role, source in skipped:
+            suffix = " — inferred from hostname" if source == "inferred" else ""
+            print(f"  - {d['hostname']} (role: {role}{suffix})")
     return l3_devices
 
 

@@ -14,7 +14,24 @@ __license__ = "Python"
 
 import argparse
 import os
+import re
 import yaml
+
+
+_HOSTNAME_ROLE_HINTS = [
+    (r"-cs\d", "core"),
+    (r"-ds\d", "distribution"),
+    (r"-as\d", "access"),
+    (r"-sw\d", "access"),
+    (r"-fwl", "firewall"),
+    (r"-wlc", "wlc"),
+    (r"spine", "spine"),
+    (r"leaf", "leaf"),
+    (r"core", "core"),
+    (r"dist", "distribution"),
+    (r"-c\d", "core"),
+    (r"-d\d", "distribution"),
+]
 
 
 CLAB_TEMPLATE = {
@@ -66,22 +83,32 @@ def build_topology(
     return output_path
 
 
+def _hint_role(hostname: str) -> str:
+    """Infer role from hostname patterns as a fallback for missing role fields."""
+    h = hostname.lower()
+    for pattern, role in _HOSTNAME_ROLE_HINTS:
+        if re.search(pattern, h):
+            return role
+    return "unknown"
+
+
 def get_representative_device(devices: list[dict]) -> dict:
     """Select a single representative device from the location device list.
 
-    Prefers the first core switch, then the first distribution switch,
-    then the first spine, then the first device in the list.  Uses the
-    explicit 'role' field from inventory.yml.
+    Prefers core, then distribution, then spine.  Uses the explicit 'role'
+    field from inventory.yml; falls back to hostname pattern inference when
+    the field is absent.
 
     Args:
-        devices: List of dicts with 'hostname', 'address', and 'role'.
+        devices: List of dicts with 'hostname', 'address', and optional 'role'.
 
     Returns:
         A single device dict.
     """
     for preferred_role in ("core", "distribution", "spine"):
         for device in devices:
-            if device.get("role") == preferred_role:
+            role = device.get("role") or _hint_role(device.get("hostname", ""))
+            if role == preferred_role:
                 return device
     return devices[0]
 
