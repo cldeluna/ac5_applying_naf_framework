@@ -378,3 +378,146 @@ Only L3 devices (by role resolution above) are included. Within those devices, o
 - No dead code, no pass-through shims.
 - All output files written to `output/` with timestamps in filenames.
 - Each module includes a `main()` stub and `if __name__ == "__main__"` block.
+
+---
+
+## Solution Diagram
+
+The diagram below illustrates the full 12-step workflow. Paste the fenced code block into [mermaid.live](https://mermaid.live) to render and export an image.
+
+```mermaid
+flowchart TD
+    subgraph SOT["Source of Truth — acl_aerleon/def/"]
+        DNS["dns.yaml — DNS_SERVERS"]
+        DHCP["dhcp.yaml — DHCP_SERVERS"]
+        DEFS["definitions.yaml — WEB_SERVERS, RFC1918\nscope, service_impact"]
+    end
+
+    EVT([Service Event]) --> COMMIT["Step 1\nGit commit to acl_aerleon/def/"]
+    COMMIT --> RUN["Step 2\npython update_basic_srvs_pol.py\n--location LOCATION"]
+
+    RUN --> ENG{"--engine?"}
+    SOT -->|load_definitions| ENG
+    ENG -->|"jinja2 (default)"| J2["Jinja2 render\nbasic_services_acl.j2"]
+    ENG -->|aerleon| AER["aclgen subprocess\nbasic_services_monolithic.pol.yaml"]
+    J2 --> ACL["Step 3 — ACL Artifact\nBASIC_DATA_SRVC_IN\nBASIC_DATA_SRVC_OUT"]
+    AER --> ACL
+
+    ACL --> IMP["Step 4 — Quantify Impact\nscope + service_impact fields"]
+    IMP --> STATE["Step 5 — Pre-change State\nNetmiko: show run | section Vlan\nshow ip access-lists per L3 device"]
+    STATE --> CR["Step 6 — Change Record\ntimestamped .txt file"]
+
+    CR --> DRY{"--dry-run?"}
+    DRY -->|yes| STOP([Exit])
+    DRY -->|no| CLAB
+
+    subgraph LAB["Step 7 — ContainerLab Validation"]
+        CLAB["Build topology YAML\nConnect via CLAB_PORT\npush_and_verify_device()"]
+        CD{"Changes\ndetected?"}
+        CR7["Rollback\nrestore pre_config"]
+        CLAB --> CD
+        CD -->|"yes + operator: rollback"| CR7
+    end
+
+    CD -->|no changes| PUSH
+    CD -->|"yes + operator: continue"| PUSH
+    CR7 --> PUSH
+
+    subgraph PROD["Step 8 — Production Push"]
+        PUSH["push_and_verify_device()\nper L3 device — sequential"]
+        PD{"Changes\ndetected?"}
+        PR["Per-device rollback\nrestore / replace / remove ACL\nidempotency: skip if no diff"]
+        PUSH --> PD
+        PD -->|"yes + operator: rollback"| PR
+    end
+
+    PD -->|no changes| VER
+    PD -->|"yes + operator: continue"| VER
+    PR --> VER
+
+    VER["Step 9 — Verify Scope (stub)"]
+    VER --> TEST["Step 10 — Test ACL Counters\nshow ip access-lists all devices"]
+    TEST --> SAVE["Step 11 — Save to Startup\nwrite memory (stub)"]
+    SAVE --> OUT["Step 12 — Consolidated Output\npush_record.json\nticket_notes.txt"]
+```
+
+---
+
+## LLM Diagramming Prompt
+
+Use the following prompt with any LLM (Claude, ChatGPT, Gemini) to generate a diagram of this solution in Mermaid, draw.io XML, PlantUML, or as a described image:
+
+```
+Generate a workflow architecture diagram for the following Python network automation solution.
+
+SOLUTION: update_basic_srvs_pol.py — a 12-step ACL lifecycle automation workflow that
+updates Basic Data Services ACLs (BASIC_DATA_SRVC_IN / BASIC_DATA_SRVC_OUT) on Cisco
+IOS Layer 3 switches across a managed site location.
+
+COMPONENTS:
+
+Source of Truth (acl_aerleon/def/):
+- dns.yaml: holds DNS_SERVERS network group (IP addresses + comments)
+- dhcp.yaml: holds DHCP_SERVERS network group
+- definitions.yaml: holds WEB_SERVERS, RFC1918, service ports, scope, service_impact metadata
+- These YAML files are the authoritative record of which servers are permitted by policy.
+  In production this data would come from an external SoT (NetBox, Infoblox, CMDB).
+
+Orchestrator: update_basic_srvs_pol.py
+Modules: state.py, push.py, verify.py, save.py, impact.py, change_record.py, containerlab.py
+
+WORKFLOW (12 steps):
+1. INTENT: Operator commits a change to acl_aerleon/def/ (e.g. adds a new DHCP server)
+2. TRIGGER: python update_basic_srvs_pol.py --location LOCATION [--engine jinja2|aerleon] [--dry-run]
+3. ARTIFACT: Two paths — (a) Jinja2 renders templates/basic_services_acl.j2 reading def/ directly,
+   or (b) aerleon aclgen reads policies/pol/basic_services_monolithic.pol.yaml — both produce
+   an ACL string (BASIC_DATA_SRVC_IN + BASIC_DATA_SRVC_OUT)
+4. IMPACT: Read scope and service_impact from definitions.yaml; format summary
+5. PRE-CHANGE STATE: Netmiko SSH to each L3 device; run show running-config | section interface Vlan
+   to discover Data SVIs (description contains "data") and current ACL names; save snapshot JSON
+6. CHANGE RECORD: Generate timestamped change ticket text file with scope, impact, device list,
+   Data SVIs, and ACL artifact
+   --- DRY-RUN exits here ---
+7. LAB VALIDATION: Build ContainerLab single-node topology YAML for a representative L3 device
+   (prefer core > distribution > spine by role); connect via Netmiko on CLAB_PORT;
+   push_and_verify_device() captures pre-state, pushes config, captures post-state, diffs;
+   if changes detected: offer operator rollback choice
+8. PRODUCTION PUSH: push_and_verify_device() on all L3 devices sequentially; stores pre_config
+   (running-config section) for smart rollback; if changes detected: offer operator rollback;
+   rollback is skipped automatically per device if no diff (idempotency)
+9. VERIFY: Post-change state capture vs pre-change snapshot (stub)
+10. TEST: show ip access-lists on all devices to check ACL hit counters
+11. SAVE: write memory on all devices (stub)
+12. OUTPUT: Write consolidated push_record.json (all push data + pre_config) and
+    ticket_notes.txt (ServiceNow-ready narrative); print narrative to stdout
+
+KEY DECISION POINTS:
+- Engine choice: jinja2 (default) or aerleon
+- Dry-run gate: exit after Step 6 if --dry-run
+- ContainerLab diff: changes detected? → offer rollback or continue
+- Production diff: per-device changes detected? → offer rollback or continue; auto-skip if no diff
+
+DEVICE FILTERING:
+- inventory.yml maps location names to device lists with hostname, address, optional role field
+- L3 roles: core, distribution, spine, leaf
+- If role field absent: infer from hostname regex (e.g. -cs = core, -ds = distribution, -sw = access)
+- Non-L3 devices (access, firewall, wlc) are logged and skipped
+
+OUTPUT FILES (all in output/):
+- <location>_prechange_state_<ts>.json
+- <location>_<host>_<acl>_rollback.txt
+- <location>_change_record_<ts>.txt
+- <location>_clab_topology.yml
+- <location>_<ts>_push_record.json
+- <location>_<ts>_ticket_notes.txt
+
+DIAGRAM STYLE:
+- Top-to-bottom orientation
+- Group into swim lanes or subgraphs: Source of Truth | Steps 1-2 Intent & Trigger |
+  Step 3 Artifact Generation | Steps 4-6 Analysis & Documentation |
+  Step 7 Lab Validation | Step 8 Production Push | Steps 9-12 Verify & Record
+- Show the two artifact engine paths as parallel branches merging at the ACL artifact node
+- Show decision diamonds for: engine choice, dry-run gate, clab diff, production diff
+- Show rollback as a branch that re-enters the main flow before continuing
+- Label SSH connections as "Netmiko" and highlight the ContainerLab node distinctly
+```
