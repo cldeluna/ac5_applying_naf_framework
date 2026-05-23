@@ -68,6 +68,24 @@ CLAB_PASSWORD=<clab_ssh_password>
 
 The `acl_aerleon/` directory lives at the **repository root** (one level above `procode_solution/`) and is the single source of truth for all ACL content. It is shared across all solution types (pro code, low code, no code, AI). Every service change that triggers a workflow run starts here — **Step 1 is a Git commit to this directory**.
 
+### Where the Source of Truth Belongs in Production
+
+This directory is **co-located with the code repository for demonstration and course purposes only**. In a production environment, this type of intent and service definition data almost never lives inside a code repository. The automation tooling and the source of truth are separate concerns.
+
+The table below shows where this data typically lives in real organisations, and what changes in the code when you integrate with each:
+
+| Source of Truth | What it holds | Integration change needed |
+|---|---|---|
+| **NetBox / Nautobot** | IP addresses, prefixes, server records, services | Replace `load_definitions()` with an API call to `/api/ipam/` or `/api/dcim/`; build the network group dicts from the response |
+| **Infoblox** | DNS records, DHCP scopes, IP address management | Pull DNS/DHCP server addresses via the Infoblox WAPI REST API |
+| **ServiceNow CMDB** | CIs for servers, services, relationships | Query `cmdb_ci_server` or custom service tables via the Table API |
+| **Separate Git repo** | YAML definitions managed by a network/infra team | Clone or fetch the definitions repo at run time; point `DEFINITIONS_DIR` at the checked-out path |
+| **Ansible / Salt / NSO data models** | Host vars, pillar data, service models | Parse the host_vars or pillar YAML files to extract the same address groups |
+
+> **The current design is intentional for this context.** Keeping `acl_aerleon/` at the repo root means all solution variants (Jinja2, aerleon, low-code, no-code, AI) reference the same definitions without duplication. It also means Step 1 — "make a Git commit that records the service change" — is directly visible and auditable, which mirrors good practice regardless of where the data ultimately originates from.
+
+In a real deployment, Step 1 would be: *update the external system of record* (e.g., add the new DHCP server to NetBox), and the workflow would pull from that system at runtime rather than reading local YAML files.
+
 ### Directory Structure
 
 ```
