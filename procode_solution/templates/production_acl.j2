@@ -1,0 +1,26 @@
+ip access-list extended FILTER-IN
+  remark Allow DNS (UDP/TCP 53) to DNS/DHCP servers
+{% for dns_ip in dns_ips %}
+  permit udp any host {{ dns_ip }} eq domain
+  permit tcp any host {{ dns_ip }} eq domain
+{% endfor %}
+
+  remark Allow DHCP (client <-> server)
+{% for dns_ip in dns_ips %}
+  permit udp any eq bootpc host {{ dns_ip }} eq bootps
+  permit udp host {{ dns_ip }} eq bootps any eq bootpc
+{% endfor %}
+
+  remark Allow SSH and HTTPS to the servers
+{% for dns_ip in dns_ips %}
+  permit tcp any host {{ dns_ip }} eq 22
+  permit tcp any host {{ dns_ip }} eq 443
+{% endfor %}
+
+  remark Allow ICMP to the servers
+{% for dns_ip in dns_ips %}
+  permit icmp any host {{ dns_ip }}
+{% endfor %}
+
+  remark Explicit deny everything else
+  deny   ip any any log
