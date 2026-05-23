@@ -68,23 +68,49 @@ CLAB_PASSWORD=<clab_ssh_password>
 
 The `acl_aerleon/` directory lives at the **repository root** (one level above `procode_solution/`) and is the single source of truth for all ACL content. It is shared across all solution types (pro code, low code, no code, AI). Every service change that triggers a workflow run starts here — **Step 1 is a Git commit to this directory**.
 
-### Where the Source of Truth Belongs in Production
+### Design Decision: Why YAML Under Version Control?
 
-This directory is **co-located with the code repository for demonstration and course purposes only**. In a production environment, this type of intent and service definition data almost never lives inside a code repository. The automation tooling and the source of truth are separate concerns.
+This solution was deliberately designed to use version-controlled YAML files as the policy store from the start — not as a permanent answer, but as a **pragmatic and auditable starting point** for teams that do not yet have purpose-built network source-of-truth tooling.
 
-The table below shows where this data typically lives in real organisations, and what changes in the code when you integrate with each:
+**What this gives you:**
+- Every change to policy intent is a Git commit with a timestamp, author, and message
+- Diffs are human-readable — you can see exactly which server was added or removed
+- The same files drive all four solution variants (pro code, low code, no code, AI) without duplication
+- No additional infrastructure required — just a text editor and a Git client
 
-| Source of Truth | What it holds | Integration change needed |
+**What this does not give you:**
+- Fine-grained access control — anyone with write access to the repo can change any file
+- A UI for non-engineers — those authoritative for DNS/DHCP must be comfortable with YAML and Git
+- Input validation — a typo in an IP address will not be caught until the ACL is generated
+- Real-time queries — there is no API; the data is static and must be manually kept current
+
+### Where Policy Intent Can Live — A Spectrum
+
+Policy intent can be stored at many levels of maturity. The options below are ordered from most pragmatic (low barrier) to most capable (requires investment):
+
+**1. Unstructured documents** — spreadsheets, Word docs, email threads. No automation is possible directly. This is where most teams start.
+
+**2. Structured files under version control** *(this solution)* — YAML files in Git. Automation can read them directly, every change is tracked, and no extra infrastructure is needed. The limitation: it is still a static file that requires someone with Git access and sufficient authority to update it when a service changes. If they forget, the next workflow run pushes a stale policy.
+
+**3. Structured files in a shared, accessible location** — the same YAML approach but hosted where non-engineers can edit via a web UI (GitLab web editor, Gitea, an internal wiki with structured export).
+
+**4. Purpose-built network source of truth** — a dedicated system designed to hold network data authoritatively. This is the target state for mature automation:
+
+| Platform | Best for | Integration change |
 |---|---|---|
-| **NetBox / Nautobot** | IP addresses, prefixes, server records, services | Replace `load_definitions()` with an API call to `/api/ipam/` or `/api/dcim/`; build the network group dicts from the response |
-| **Infoblox** | DNS records, DHCP scopes, IP address management | Pull DNS/DHCP server addresses via the Infoblox WAPI REST API |
-| **ServiceNow CMDB** | CIs for servers, services, relationships | Query `cmdb_ci_server` or custom service tables via the Table API |
-| **Separate Git repo** | YAML definitions managed by a network/infra team | Clone or fetch the definitions repo at run time; point `DEFINITIONS_DIR` at the checked-out path |
-| **Ansible / Salt / NSO data models** | Host vars, pillar data, service models | Parse the host_vars or pillar YAML files to extract the same address groups |
+| **NetBox / Nautobot** | IP addresses, prefixes, server records, services | Replace `load_definitions()` with an API call to `/api/ipam/` or `/api/dcim/` |
+| **Infoblox / BlueCat** | DNS records, DHCP scopes, IPAM | Pull server addresses via the WAPI REST API |
+| **Cisco NSO** | Service models, device config intent | Read from NSO service instances via RESTCONF |
+| **Separate Git repo** | YAML definitions owned by a network/infra team | Point `DEFINITIONS_DIR` at the checked-out path at runtime |
+| **Ansible / Salt host vars** | Host vars, pillar data, service models | Parse the host_vars or pillar YAML to extract address groups |
 
-> **The current design is intentional for this context.** Keeping `acl_aerleon/` at the repo root means all solution variants (Jinja2, aerleon, low-code, no-code, AI) reference the same definitions without duplication. It also means Step 1 — "make a Git commit that records the service change" — is directly visible and auditable, which mirrors good practice regardless of where the data ultimately originates from.
+**5. Enterprise CMDB** (ServiceNow, BMC Helix) — authoritative CI records for servers and services. Useful when your CMDB is genuinely maintained; in practice many are not reliable enough to automate from directly.
 
-In a real deployment, Step 1 would be: *update the external system of record* (e.g., add the new DHCP server to NetBox), and the workflow would pull from that system at runtime rather than reading local YAML files.
+> **The current design is intentional for this context.** Keeping `acl_aerleon/` at the repo root means all solution variants share the same definitions without duplication, and Step 1 — the service change — is a visible, auditable Git commit. This mirrors good practice regardless of where the data ultimately originates from.
+
+The single integration point to replace when you adopt a proper SoT is `load_definitions()` in `modules/impact.py`. Everything downstream stays the same.
+
+In a real deployment, Step 1 becomes: *update the external system of record* (add the new DHCP server to NetBox, or update the Infoblox record), and the workflow pulls from that system at runtime.
 
 ### Directory Structure
 
