@@ -511,13 +511,44 @@ OUTPUT FILES (all in output/):
 - <location>_<ts>_push_record.json
 - <location>_<ts>_ticket_notes.txt
 
-DIAGRAM STYLE:
-- Top-to-bottom orientation
-- Group into swim lanes or subgraphs: Source of Truth | Steps 1-2 Intent & Trigger |
-  Step 3 Artifact Generation | Steps 4-6 Analysis & Documentation |
-  Step 7 Lab Validation | Step 8 Production Push | Steps 9-12 Verify & Record
-- Show the two artifact engine paths as parallel branches merging at the ACL artifact node
-- Show decision diamonds for: engine choice, dry-run gate, clab diff, production diff
-- Show rollback as a branch that re-enters the main flow before continuing
-- Label SSH connections as "Netmiko" and highlight the ContainerLab node distinctly
+DIAGRAM STYLE — NAF FRAMEWORK MATRIX:
+
+Render this as a matrix table, NOT a flowchart. Match the following style exactly:
+
+LAYOUT:
+- Rows = the 12 workflow steps (left column shows step number, step name in bold, and tool/implementation in smaller text)
+- Columns = the 6 NAF framework blocks as column headers (right of the step column)
+- Header row: step number column (no header), then the 6 block names in white bold text on their block color
+- A filled colored cell means that workflow step uses a tool that provides that block's functionality
+- An empty cell shows only a small centered gray dot
+
+COLUMN COLORS (use these exact hex values):
+- PRESENTATION:  background #FFC000, white text
+- OBSERVABILITY: background #70AD47, white text
+- ORCHESTRATION: background #00B0F0, white text
+- INTENT:        background #FF6600, white text
+- COLLECTOR:     background #E63946, white text
+- EXECUTOR:      background #7030A0, white text
+
+STEP-TO-BLOCK MAPPING (filled = colored cell with tool icon/name, empty = gray dot):
+Step 1  | Document Change Scope      | Git commit to acl_aerleon/def/      | PRESENTATION ● INTENT ●
+Step 2  | Trigger Workflow            | Python script (argparse CLI)         | PRESENTATION ● ORCHESTRATION ●
+Step 3  | Build ACL Artifact          | Python + Jinja2 or aerleon aclgen   | PRESENTATION ● ORCHESTRATION ● INTENT ●
+Step 4  | Quantify Impact             | Python reads definitions.yaml        | OBSERVABILITY ● ORCHESTRATION ●
+Step 5  | Check Current State         | Netmiko SSH (show commands)          | OBSERVABILITY ● ORCHESTRATION ● COLLECTOR ●
+Step 6  | Create Change Record        | Python generates .txt file           | PRESENTATION ● ORCHESTRATION ● INTENT ●
+Step 7  | Lab Validation (Scale=1)    | ContainerLab + Netmiko              | ORCHESTRATION ● INTENT ● COLLECTOR ● EXECUTOR ●
+Step 8  | Push Update to Scope        | Netmiko send_config_set             | ORCHESTRATION ● EXECUTOR ●
+Step 9  | Verify Changes              | Netmiko post-change capture (stub)  | OBSERVABILITY ● ORCHESTRATION ● COLLECTOR ● EXECUTOR ●
+Step 10 | Test Across Scope           | Netmiko show ip access-lists         | OBSERVABILITY ● ORCHESTRATION ● COLLECTOR ● EXECUTOR ●
+Step 11 | Save / Commit Scope         | Netmiko write memory (stub)         | ORCHESTRATION ● EXECUTOR ●
+Step 12 | Final Record Updates        | Python JSON + txt output             | PRESENTATION ● ORCHESTRATION ● EXECUTOR ●
+
+ADDITIONAL STYLE NOTES:
+- Add a caption below the table: "Tool icons indicate which component provides the framework block capability for that workflow step."
+- Add a header note above the table: "Rows are workflow steps; columns are the 6 NAF framework blocks. Filled cell = the workflow step uses a tool that provides that block functionality. Infrastructure is excluded — it is the substrate, not a tool choice."
+- In filled cells, show the tool name or a recognisable icon (Python logo, Netmiko label, ContainerLab label, Git icon, ServiceNow "now" logo where applicable)
+- Filled cells should use the column's background color with a white or light tool indicator
+- The left step column has a white background with the step number in a small gray circle
+- Overall table has a light gray border and clean sans-serif font
 ```
