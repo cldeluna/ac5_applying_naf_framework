@@ -398,10 +398,10 @@ flowchart TD
         DEFS["definitions.yaml — WEB_SERVERS, RFC1918\nscope, service_impact"]
     end
 
-    H1(["👤 Update DNS/DHCP server IPs\nin acl_aerleon/def/ — commit to Git"]):::human
-    H1 --> COMMIT["Step 1\nGit commit to acl_aerleon/def/"]
-    COMMIT --> H2(["👤 Execute script from CLI\npython update_basic_srvs_pol.py\n--location LOCATION"]):::human
-    H2 --> ENG{"--engine?"}
+    EVT([Service Event]) --> COMMIT["👤 Step 1\nGit commit to acl_aerleon/def/"]:::human
+    COMMIT --> RUN["👤 Step 2\npython update_basic_srvs_pol.py\n--location LOCATION"]:::human
+
+    RUN --> ENG{"--engine?"}
     SOT -->|load_definitions| ENG
     ENG -->|"jinja2 (default)"| J2["Jinja2 render\nbasic_services_acl.j2"]
     ENG -->|aerleon| AER["aclgen subprocess\nbasic_services_monolithic.pol.yaml"]
@@ -411,43 +411,39 @@ flowchart TD
     ACL --> IMP["Step 4 — Quantify Impact\nscope + service_impact fields"]
     IMP --> STATE["Step 5 — Pre-change State\nNetmiko: show run | section Vlan\nshow ip access-lists per L3 device"]
     STATE --> CR["Step 6 — Change Record\ntimestamped .txt file"]
-    CR --> H3(["👤 Create change ticket in ServiceNow\nSet to Approved / Scheduled state"]):::human
+    CR --> TICKET["👤 Create & approve\nchange ticket in ServiceNow"]:::human
 
-    H3 --> DRY{"--dry-run?"}
+    TICKET --> DRY{"--dry-run?"}
     DRY -->|yes| STOP([Exit])
     DRY -->|no| CLAB
 
     subgraph LAB["Step 7 — ContainerLab Validation"]
         CLAB["Build topology YAML\nConnect via CLAB_PORT\npush_and_verify_device()"]
-        CD{"clab changes\ndetected?"}
+        CD{"👤 Clab diff —\nrollback or approve?"}:::human
         CR7["Rollback clab\nrestore pre_config"]
         CLAB --> CD
+        CD -->|rollback| CR7
+        CD -->|"no changes / approve"| PUSH
     end
 
-    CD -->|no changes| PUSH
-    CD -->|yes| H4(["👤 Review clab diff\nApprove to proceed or rollback?"]):::human
-    H4 -->|rollback| CR7
-    H4 -->|approve| PUSH
     CR7 --> PUSH
 
     subgraph PROD["Step 8 — Production Push"]
         PUSH["push_and_verify_device()\nper L3 device — sequential"]
-        PD{"prod changes\ndetected?"}
-        PR["Per-device rollback\nrestore / replace / remove ACL\nidempotency: skip if no diff"]
+        PD{"👤 Prod diff —\nrollback or approve?"}:::human
+        PR["Per-device rollback\nidempotency: skip if no diff"]
         PUSH --> PD
+        PD -->|rollback| PR
+        PD -->|"no changes / approve"| VER
     end
 
-    PD -->|no changes| VER
-    PD -->|yes| H5(["👤 Review production diffs\nApprove or rollback per device?"]):::human
-    H5 -->|rollback| PR
-    H5 -->|approve| VER
     PR --> VER
 
     VER["Step 9 — Verify Scope (stub)"]
     VER --> TEST["Step 10 — Test ACL Counters\nshow ip access-lists all devices"]
     TEST --> SAVE["Step 11 — Save to Startup\nwrite memory (stub)"]
     SAVE --> OUT["Step 12 — Consolidated Output\npush_record.json\nticket_notes.txt"]
-    OUT --> H6(["👤 Close change ticket\nAttach artifacts from output/"]):::human
+    OUT --> CLOSE["👤 Close change ticket\nAttach artifacts from output/"]:::human
 ```
 
 ---
