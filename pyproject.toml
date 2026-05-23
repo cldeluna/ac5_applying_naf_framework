@@ -4,4 +4,14 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "jinja2>=3.1.6",
+    "netmiko>=4.7.0",
+    "python-dotenv>=1.0.0",
+]
+
+[tool.uv.workspace]
+members = [
+    "aerleon",
+    "acl_aerleon",
+]

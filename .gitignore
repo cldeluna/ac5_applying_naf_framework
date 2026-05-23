@@ -8,3 +8,11 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Secrets
+.env
+.env.example
+
+# IDE Files/folders
+.DS_Store
+.idea/
