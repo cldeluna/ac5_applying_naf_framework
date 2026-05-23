@@ -349,14 +349,17 @@ Only L3 devices (by role resolution above) are included. Within those devices, o
 
 **Output Files** (all written to `output/`)
 
-| File | Contents |
-|------|----------|
-| `<location>_prechange_state_<ts>.json` | Pre-change device state snapshot |
-| `<location>_<host>_<acl>_rollback.txt` | Per-device ACL text for emergency rollback |
-| `<location>_change_record_<ts>.txt` | Change ticket text |
-| `<location>_clab_topology.yml` | ContainerLab topology YAML |
-| `<location>_<ts>_push_record.json` | Consolidated push data including `pre_config` |
-| `<location>_<ts>_ticket_notes.txt` | ServiceNow narrative |
+| File | Step | Contents |
+|------|------|----------|
+| `basic_services_acl.txt` | 3 | Rendered ACL artifact (Jinja2 or aerleon path) |
+| `<location>_prechange_state_<ts>.json` | 5 | Pre-change device state snapshot |
+| `<location>_<hostname>_<acl>_rollback.txt` | 5 | Per-device per-ACL text for emergency rollback |
+| `<location>_change_record_<ts>.txt` | 6 | Change ticket text |
+| `<location>_clab_topology.yml` | 7 | ContainerLab topology YAML |
+| `<location>_<ts>_push_record.json` | 12 | Consolidated push data for all devices including `pre_config` |
+| `<location>_<ts>_ticket_notes.txt` | 12 | ServiceNow-ready narrative |
+| `<location>_verify_report_<ts>.json` | 9 | Post-change verify report (stub) |
+| `<location>_save_results_<ts>.json` | 11 | Save-to-startup results (stub) |
 
 **Module Structure**
 
@@ -504,12 +507,15 @@ DEVICE FILTERING:
 - Non-L3 devices (access, firewall, wlc) are logged and skipped
 
 OUTPUT FILES (all in output/):
-- <location>_prechange_state_<ts>.json
-- <location>_<host>_<acl>_rollback.txt
-- <location>_change_record_<ts>.txt
-- <location>_clab_topology.yml
-- <location>_<ts>_push_record.json
-- <location>_<ts>_ticket_notes.txt
+- basic_services_acl.txt                          (Step 3 — rendered ACL artifact)
+- <location>_prechange_state_<ts>.json            (Step 5 — pre-change snapshot)
+- <location>_<hostname>_<acl>_rollback.txt        (Step 5 — per-device per-ACL rollback text)
+- <location>_change_record_<ts>.txt               (Step 6 — change ticket)
+- <location>_clab_topology.yml                    (Step 7 — ContainerLab topology)
+- <location>_verify_report_<ts>.json              (Step 9 — post-change verify report, stub)
+- <location>_save_results_<ts>.json               (Step 11 — save-to-startup results, stub)
+- <location>_<ts>_push_record.json                (Step 12 — consolidated push data for all devices)
+- <location>_<ts>_ticket_notes.txt                (Step 12 — ServiceNow narrative)
 
 DIAGRAM STYLE — NAF FRAMEWORK MATRIX:
 
