@@ -144,6 +144,7 @@ When inference is used, an `INFO` line is logged. Devices that match no pattern 
 
 ### What We Are NOT Checking (Known Gaps)
 
+- **SVI description must contain the word `data`** — Data SVIs are identified solely by checking for `data` (case-insensitive) in the interface description. If an operator configured a Data SVI but omitted or misspelled the keyword in the description, that interface will be silently skipped and will not receive the ACL update. There is no warning, no diff, and no record of the miss. This is the highest-risk gap: a production interface could be left with an outdated policy with no indication that anything was missed.
 - **No pre-flight reachability test** — if a device is unreachable, the workflow discovers this at SSH connection time, not before.
 - **No IOS version or platform validation** — `cisco_ios` device type is assumed for all devices; no check is performed.
 - **No ACL semantic validation** — the generated ACL is pushed as-is with no check for duplicate entries, conflicting rules, or inadvertent permit-any-any.
