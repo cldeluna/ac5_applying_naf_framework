@@ -38,9 +38,6 @@ filters:
       cisco: BASIC_DATA_SRVC_OUT mixed
       arista: BASIC_DATA_SRVC_OUT mixed
   terms:
-    - name: deny-bad-destinations
-      destination-address: RFC1918
-      action: deny
     - name: accept-outbound-dns
       comment: Accept outbound DNS queries from DNS servers
       source-address: DNS_SERVERS
