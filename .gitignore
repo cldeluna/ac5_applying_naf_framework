@@ -16,3 +16,5 @@ wheels/
 # IDE Files/folders
 .DS_Store
 .idea/
+
+*alias
