@@ -81,12 +81,13 @@ def test_acl_counters(
     for device in devices:
         hostname = device["hostname"]
         address = device["address"]
+        device_port = device.get("port", port)
         entry = {"hostname": hostname, "acl_name": acl_name, "output": "", "error": None}
         try:
             device_params = {
                 "device_type": "cisco_ios",
                 "host": address,
-                "port": port,
+                "port": device_port,
                 "username": username,
                 "password": password,
             }

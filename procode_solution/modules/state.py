@@ -197,9 +197,10 @@ def capture_location_state(
     rollback_files = []
 
     for device in devices:
-        print(f"\n  Connecting to {device['hostname']} ({device['address']}:{port})...")
+        device_port = device.get("port", port)
+        print(f"\n  Connecting to {device['hostname']} ({device['address']}:{device_port})...")
         device_state = get_device_state(
-            device["hostname"], device["address"], username, password, port=port
+            device["hostname"], device["address"], username, password, port=device_port
         )
         snapshot["devices"][device["hostname"]] = device_state
         if device_state.get("error"):
