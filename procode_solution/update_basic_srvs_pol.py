@@ -702,6 +702,7 @@ def main(args: argparse.Namespace) -> int:
     cr_path = change_record.build_change_record(
         args.location, devices, impact_data, acl_artifact, args.engine, OUTPUT_DIR,
         data_svis=all_svis,
+        pre_change_snapshot=snapshot,
     )
     print(f"Change record: {cr_path}")
     print("\nAction required:")
