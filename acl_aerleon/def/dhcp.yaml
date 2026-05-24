@@ -1,0 +1,14 @@
+---
+networks:
+  DHCP_SERVERS:
+    values:
+      - address: 192.168.1.10/32
+        comment: DHCP Server 1
+      - address: 192.168.1.11/32
+        comment: DHCP Server 2
+services:
+  DHCP:
+    - protocol: udp
+      port: 67
+    - protocol: udp
+      port: 68
