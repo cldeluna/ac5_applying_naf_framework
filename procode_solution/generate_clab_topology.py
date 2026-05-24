@@ -12,6 +12,41 @@ __date__ = "5/24/26"
 __copyright__ = "Copyright (c) 2023 Claudia"
 __license__ = "Python"
 
+"""
+generate_clab_topology.py — ContainerLab topology generator for ACL policy testing.
+
+Generates a complete, ready-to-deploy ContainerLab file tree under
+output/containerlab_topology/ by combining two sources of truth:
+
+  1. Lab topology structure (node kinds, images, VLAN numbering, link wiring)
+     Reference implementation: https://github.com/cldeluna/internet-cisco-iol-l2-clab
+     The topology uses a Cisco IOL L2 switch connected to an Alpine Linux server
+     container (running dnsmasq + nginx) and an Alpine Linux client container.
+
+  2. IP address policy (DHCP server IP, DNS server IP, ip helper-address values)
+     Source: acl_aerleon/def/dhcp.yaml and acl_aerleon/def/dns.yaml
+     Auto-discovered at ../acl_aerleon/def/ relative to this script.
+     Re-run this script after any Step 1 SoT commit to refresh the topology.
+
+Only the FIRST DHCP server entry from dhcp.yaml is used.  The test validates
+that the ACL permits DHCP relay traffic to that server IP — not DHCP server
+redundancy.  The server container is assigned that IP on eth1; the switch SVIs
+carry ip helper-address pointing to it; dnsmasq serves DHCP ranges for the
+three client VLANs (10/20/30) using RFC5737 documentation ranges.
+
+Output files (all stamped with a created: timestamp in their headers):
+  internet-cisco-iol-l3-lab.clab.yml
+  sw1.partial.cfg
+  server/dnsmasq.conf
+  server/start.sh
+  server/nginx-default.conf
+  client/start.sh
+
+Usage:
+  uv run generate_clab_topology.py
+  uv run generate_clab_topology.py --sot-dir PATH --output-dir PATH
+"""
+
 import argparse
 import datetime
 import ipaddress

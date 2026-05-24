@@ -49,6 +49,49 @@ python update_basic_srvs_pol.py UWACO_PacificHQ_TEST --dry-run
 python update_basic_srvs_pol.py UWACO_PacificHQ --engine aerleon
 ```
 
+## Lab Topology Generation — `generate_clab_topology.py`
+
+Before running Step 7 (ContainerLab validation), generate the full lab topology from the source of truth:
+
+```bash
+uv run generate_clab_topology.py
+# or with explicit paths:
+uv run generate_clab_topology.py --sot-dir ../acl_aerleon/def --output-dir output/containerlab_topology
+```
+
+This writes a complete, ready-to-deploy ContainerLab file tree to `output/containerlab_topology/`:
+
+```
+output/containerlab_topology/
+  internet-cisco-iol-l3-lab.clab.yml   ← main topology (IOL L2 switch + server + client)
+  sw1.partial.cfg                       ← switch startup config
+  server/
+    dnsmasq.conf                        ← DHCP/DNS config for server container
+    start.sh                            ← configures server container IP
+    nginx-default.conf                  ← minimal nginx config
+  client/
+    start.sh                            ← brings up client VLAN interfaces
+```
+
+Deploy the generated topology:
+```bash
+cd output/containerlab_topology
+sudo clab deploy -t internet-cisco-iol-l3-lab.clab.yml
+```
+
+### Two Sources of Truth
+
+`generate_clab_topology.py` draws from **two** sources:
+
+| What | Source | Changes when |
+|---|---|---|
+| **Lab topology structure** — node kinds, images, link wiring, VLAN numbering | [`cldeluna/internet-cisco-iol-l2-clab`](https://github.com/cldeluna/internet-cisco-iol-l2-clab) | The reference topology repo is updated |
+| **IP addresses** — DHCP server IP, DNS server IP, `ip helper-address` | `acl_aerleon/def/dhcp.yaml` + `dns.yaml` | The SoT YAML files are updated (Step 1 of the workflow) |
+
+The script always reads the `def/` YAML files at runtime. Re-run it after any Step 1 commit to keep the generated topology in sync with the current policy intent.
+
+> **Only the first DHCP server entry** from `dhcp.yaml` is used in the lab. The goal is to verify the ACL permits DHCP traffic — not to replicate server redundancy. The server container is configured with that IP on `eth1`, the switch SVIs carry `ip helper-address` pointing to it, and `dnsmasq` serves DHCP ranges for the three client VLANs via relay.
+
 ### Environment Variables (`.env`)
 
 ```
