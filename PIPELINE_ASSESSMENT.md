@@ -142,22 +142,87 @@ lab validation, production push with rollback, and change record creation.
 
 ## Maturity Level
 
-On a 5-level automation maturity scale:
+### The Space Program Framework
 
-| Level | Description | Status |
+Automation maturity maps cleanly to the progression of NASA's early space
+program — each mission phase built on the last, expanding capability and
+confidence before attempting the next challenge.
+
+---
+
+#### 🚀 Mercury — Device-Level, Fragmented Workflows in Service Silos
+
+*Prove humans can survive in space. One device, one engineer, one task at a time.*
+
+| Capability | Description |
+|---|---|
+| 1 | Manual state and configuration details |
+| 2 | Configuration templates under revision control |
+| 3 | Generate configuration payload |
+| 4 | Test payload |
+| 5 | Push configuration payload |
+
+Mercury teams operate device-by-device. Automation exists but lives in
+personal scripts and service silos. Templates may be version-controlled, but
+execution depends on the individual engineer knowing which script to run, in
+what order, against which device.
+
+---
+
+#### 🛰️ Gemini — Multiple Device / Campus, Fewer and More Unified Workflows Within a Service
+
+*Learn to rendezvous and work together. Scale up, close the loop, begin
+orchestrating steps.*
+
+| Capability | Description |
+|---|---|
+| 1 | Extract state at scale |
+| 2 | Generate configurations at scale |
+| 3 | Test at scale across functional dependencies |
+| 4 | Push payload at scale |
+| 5 | Automate verification and package for final documentation |
+| 6 | Partial workflow orchestration |
+
+Gemini teams have broken out of the silo. The same workflow runs against a
+campus or a data center. Verification is automated. Change records are
+machine-generated. Steps are orchestrated — but human checkpoints remain
+at key gates.
+
+---
+
+#### 🌕 Apollo — Single or Multiple Device, Campus or Data Center Level, Unified Workflows Across Services
+
+*Land on the moon. Fully orchestrated. Intent drives the mission from
+declaration to completion without manual intervention.*
+
+| Capability | Description |
+|---|---|
+| 1 | Fully orchestrated workflows |
+
+Apollo teams declare intent. The pipeline validates it, tests it, pushes it,
+verifies it, documents it, and commits it — across services, across locations,
+with RBAC, ITSM integration, a live CMDB, and a credential vault. The network
+engineer reviews the output, not the steps.
+
+---
+
+### Where `procode_solution` Sits
+
+| Mission | Status | Notes |
 |---|---|---|
-| 1 | Ad-hoc scripts, no state, no rollback | ✅ Surpassed |
-| 2 | Structured workflow, state capture, rollback, change record | ✅ **Achieved** |
-| 3 | SoT-driven, ITSM integration, lab validation, tested | ⚡ **Partially here** |
-| 4 | CI/CD-driven, parallel, RBAC, dynamic inventory, vault | 🔲 Not yet |
-| 5 | Intent-based, event-driven, closed-loop self-healing | 🔲 Future state |
+| ☑ Mercury | ✅ **Complete** | Templates under version control, payload generation, lab test, production push — all present |
+| ☑ Gemini 1–4 | ✅ **Complete** | State extraction, config generation, lab validation, and push all operate at location scale |
+| ⚡ Gemini 5 | ⚡ **Partial** | Change record is machine-generated and ACL diff is automated; post-push verification (`verify.py`) is a stub |
+| ⚡ Gemini 6 | ⚡ **Partial** | 12-step workflow is orchestrated in a single script; CI/CD, ITSM API, and parallel push are missing |
+| 🔲 Apollo | 🔲 **Not yet** | Requires full orchestration, RBAC, vault, dynamic CMDB, and closed-loop verification |
 
-**Rating: 2.5 — Solidly structured, professionally architected, not yet
-hardened for scale.**
+**Rating: Late Gemini — mission is flying, rendezvous is working, final
+docking and re-entry automation remain.**
 
-The foundation is correct. This is not a rework problem — it is a completion
-and hardening problem. The architecture would survive a proper Level 4 buildout
-without fundamental redesign.
+The foundation is correct and the architecture is sound. Moving to Apollo does
+not require a redesign — it requires completing the stubs, adding integrations,
+and hardening for scale. A team that builds on this foundation reaches Apollo
+faster than one starting from scratch.
 
 ---
 
@@ -208,7 +273,7 @@ without fundamental redesign.
 - **Dual rendering engines** — Not locked to a single toolchain. Teams can
   adopt Aerleon incrementally without abandoning existing Jinja2 templates.
 
-### What It Needs to Reach Production-Grade
+### What It Needs to Complete the Gemini Mission (and Reach Apollo)
 
 - **Implement Steps 9–11** — Post-push verification and `write memory` are
   non-negotiable. Currently stubs.
@@ -237,9 +302,12 @@ without fundamental redesign.
 
 ### The Honest Bottom Line
 
-> This pipeline is ahead of most network teams' automation maturity. The
-> architecture is correct. The safety model is correct. The change record
-> quality is enterprise-usable today. The gaps are about hardening and
-> integration — not fundamental redesign. A team that builds on this
-> foundation will reach Level 4 maturity faster than one starting from
-> scratch.
+> **Mission status: Late Gemini.** The rocket is built, it has flown, and
+> the crew has returned safely. This pipeline is ahead of most network
+> teams' automation maturity — the majority are still in Mercury, operating
+> device-by-device in service silos. The architecture here is correct. The
+> safety model is correct. The change record quality is enterprise-usable
+> today. Completing Gemini (post-push verification, structured logging,
+> CI/CD, ITSM integration) is an engineering sprint — not a redesign. A
+> team that builds on this foundation reaches Apollo faster than one
+> starting from scratch.
