@@ -1,0 +1,16 @@
+---
+networks:
+  DNS_SERVERS:
+    values:
+      - address: 10.0.0.5/32
+        comment: DNS Server 1
+      - address: 10.0.0.6/32
+        comment: DNS Server 2
+      - address: 192.168.1.10/32
+        comment: DNS Server 3
+services:
+  DNS:
+    - protocol: udp
+      port: 53
+    - protocol: tcp
+      port: 53

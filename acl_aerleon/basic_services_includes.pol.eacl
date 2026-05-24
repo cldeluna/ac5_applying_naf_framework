@@ -1,0 +1,124 @@
+! $Id:$
+! $Date:$
+! $Revision:$
+no ip access-list inbound
+ip access-list inbound
+ remark $Id:$
+ remark Basic services inbound
+
+
+ remark accept-web-servers
+ remark Accept connections to our web servers
+ permit tcp any host 10.0.0.1 eq www
+ permit tcp any host 10.0.0.1 eq https
+ permit tcp any host 10.0.0.2 eq www
+ permit tcp any host 10.0.0.2 eq https
+
+
+ remark default-deny
+ remark Deny anything else.
+ deny ip any any
+
+exit
+
+no ip access-list inbound
+ip access-list inbound
+ remark $Id:$
+ remark DNS inbound
+
+
+ remark accept-inbound-dns
+ remark Accept inbound DNS queries to DNS servers
+ permit tcp any host 10.0.0.5 eq domain
+ permit udp any host 10.0.0.5 eq domain
+ permit tcp any host 10.0.0.6 eq domain
+ permit udp any host 10.0.0.6 eq domain
+
+exit
+
+no ip access-list outbound
+ip access-list outbound
+ remark $Id:$
+ remark DNS outbound
+
+
+ remark accept-outbound-dns
+ remark Accept outbound DNS queries from DNS servers
+ permit tcp host 10.0.0.5 any eq domain
+ permit udp host 10.0.0.5 any eq domain
+ permit tcp host 10.0.0.6 any eq domain
+ permit udp host 10.0.0.6 any eq domain
+
+exit
+
+no ipv6 access-list ipv6-outbound
+ipv6 access-list ipv6-outbound
+ remark $Id:$
+ remark DNS outbound
+
+exit
+
+no ip access-list inbound
+ip access-list inbound
+ remark $Id:$
+ remark DHCP inbound
+
+
+ remark accept-inbound-dhcp
+ remark Accept inbound DHCP requests to DHCP servers
+ permit udp any host 10.0.0.7 eq bootps
+ permit udp any host 10.0.0.7 eq bootpc
+ permit udp any host 10.0.0.8 eq bootps
+ permit udp any host 10.0.0.8 eq bootpc
+
+exit
+
+no ip access-list outbound
+ip access-list outbound
+ remark $Id:$
+ remark DHCP outbound
+
+
+ remark accept-outbound-dhcp
+ remark Accept outbound DHCP responses from DHCP servers
+ permit udp host 10.0.0.7 any eq bootps
+ permit udp host 10.0.0.7 any eq bootpc
+ permit udp host 10.0.0.8 any eq bootps
+ permit udp host 10.0.0.8 any eq bootpc
+
+exit
+
+no ipv6 access-list ipv6-outbound
+ipv6 access-list ipv6-outbound
+ remark $Id:$
+ remark DHCP outbound
+
+exit
+
+no ip access-list outbound
+ip access-list outbound
+ remark $Id:$
+ remark Basic services outbound
+
+
+ remark deny-bad-destinations
+ deny ip any 10.0.0.0/8
+ deny ip any 172.16.0.0/12
+ deny ip any 192.168.0.0/16
+
+
+ remark default-accept
+ permit ip any any
+
+exit
+
+no ipv6 access-list ipv6-outbound
+ipv6 access-list ipv6-outbound
+ remark $Id:$
+ remark Basic services outbound
+
+
+ remark default-accept
+ permit ipv6 any any
+
+exit

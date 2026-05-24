@@ -1,0 +1,124 @@
+! $Id:$
+! $Date:$
+! $Revision:$
+no ip access-list extended BASIC_DATA_SRVC
+ip access-list extended BASIC_DATA_SRVC
+ remark $Id:$
+ remark Basic services inbound
+
+
+ remark accept-web-servers
+ remark Accept connections to our web servers
+ permit tcp any host 10.0.0.1 eq 80
+ permit tcp any host 10.0.0.1 eq 443
+ permit tcp any host 10.0.0.2 eq 80
+ permit tcp any host 10.0.0.2 eq 443
+
+
+ remark default-deny
+ remark Deny anything else.
+ deny ip any any
+
+exit
+
+no ip access-list extended BASIC_DATA_SRVC
+ip access-list extended BASIC_DATA_SRVC
+ remark $Id:$
+ remark DNS inbound
+
+
+ remark accept-inbound-dns
+ remark Accept inbound DNS queries to DNS servers
+ permit tcp any host 10.0.0.5 eq 53
+ permit udp any host 10.0.0.5 eq 53
+ permit tcp any host 10.0.0.6 eq 53
+ permit udp any host 10.0.0.6 eq 53
+
+exit
+
+no ip access-list extended BASIC_DATA_SRVC_OUT
+ip access-list extended BASIC_DATA_SRVC_OUT
+ remark $Id:$
+ remark DNS outbound
+
+
+ remark accept-outbound-dns
+ remark Accept outbound DNS queries from DNS servers
+ permit tcp host 10.0.0.5 any eq 53
+ permit udp host 10.0.0.5 any eq 53
+ permit tcp host 10.0.0.6 any eq 53
+ permit udp host 10.0.0.6 any eq 53
+
+exit
+
+no ipv6 access-list ipv6-BASIC_DATA_SRVC_OUT
+ipv6 access-list ipv6-BASIC_DATA_SRVC_OUT
+ remark $Id:$
+ remark DNS outbound
+
+exit
+
+no ip access-list extended BASIC_DATA_SRVC
+ip access-list extended BASIC_DATA_SRVC
+ remark $Id:$
+ remark DHCP inbound
+
+
+ remark accept-inbound-dhcp
+ remark Accept inbound DHCP requests to DHCP servers
+ permit udp any host 10.0.0.7 eq 67
+ permit udp any host 10.0.0.7 eq 68
+ permit udp any host 10.0.0.8 eq 67
+ permit udp any host 10.0.0.8 eq 68
+
+exit
+
+no ip access-list extended BASIC_DATA_SRVC_OUT
+ip access-list extended BASIC_DATA_SRVC_OUT
+ remark $Id:$
+ remark DHCP outbound
+
+
+ remark accept-outbound-dhcp
+ remark Accept outbound DHCP responses from DHCP servers
+ permit udp host 10.0.0.7 any eq 67
+ permit udp host 10.0.0.7 any eq 68
+ permit udp host 10.0.0.8 any eq 67
+ permit udp host 10.0.0.8 any eq 68
+
+exit
+
+no ipv6 access-list ipv6-BASIC_DATA_SRVC_OUT
+ipv6 access-list ipv6-BASIC_DATA_SRVC_OUT
+ remark $Id:$
+ remark DHCP outbound
+
+exit
+
+no ip access-list extended BASIC_DATA_SRVC_OUT
+ip access-list extended BASIC_DATA_SRVC_OUT
+ remark $Id:$
+ remark Basic services outbound
+
+
+ remark deny-bad-destinations
+ deny ip any 10.0.0.0 0.255.255.255
+ deny ip any 172.16.0.0 0.15.255.255
+ deny ip any 192.168.0.0 0.0.255.255
+
+
+ remark default-accept
+ permit ip any any
+
+exit
+
+no ipv6 access-list ipv6-BASIC_DATA_SRVC_OUT
+ipv6 access-list ipv6-BASIC_DATA_SRVC_OUT
+ remark $Id:$
+ remark Basic services outbound
+
+
+ remark default-accept
+ permit ipv6 any any
+
+exit

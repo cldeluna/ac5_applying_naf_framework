@@ -1,0 +1,89 @@
+! $Id:$
+! $Date:$
+! $Revision:$
+no ip access-list extended BASIC_DATA_SRVC_IN
+ip access-list extended BASIC_DATA_SRVC_IN
+ remark $Id:$
+ remark Basic data services inbound
+
+
+ remark accept-web-servers
+ remark Accept connections to our web servers
+ permit tcp any host 10.0.0.1 eq 80
+ permit tcp any host 10.0.0.1 eq 443
+ permit tcp any host 10.0.0.2 eq 80
+ permit tcp any host 10.0.0.2 eq 443
+ permit tcp any host 192.168.1.10 eq 80
+ permit tcp any host 192.168.1.10 eq 443
+
+
+ remark accept-inbound-dns
+ remark Accept inbound DNS queries to DNS servers
+ permit tcp any host 10.0.0.5 eq 53
+ permit udp any host 10.0.0.5 eq 53
+ permit tcp any host 10.0.0.6 eq 53
+ permit udp any host 10.0.0.6 eq 53
+ permit tcp any host 192.168.1.10 eq 53
+ permit udp any host 192.168.1.10 eq 53
+
+
+ remark accept-dhcp-client-broadcast
+ remark Accept DHCP client broadcasts (DISCOVER/REQUEST) before ip
+ remark helper-address relay converts to unicast
+ permit udp any host 255.255.255.255 eq 67
+ permit udp any host 255.255.255.255 eq 68
+
+
+ remark accept-inbound-dhcp
+ remark Accept inbound DHCP requests to DHCP servers (unicast renewals)
+ permit udp any host 192.168.1.10 eq 67
+ permit udp any host 192.168.1.10 eq 68
+ permit udp any host 192.168.1.11 eq 67
+ permit udp any host 192.168.1.11 eq 68
+
+
+ remark default-deny
+ remark Deny anything else.
+ deny ip any any
+
+exit
+
+no ip access-list extended BASIC_DATA_SRVC_OUT
+ip access-list extended BASIC_DATA_SRVC_OUT
+ remark $Id:$
+ remark Basic data services outbound
+
+
+ remark accept-outbound-dns
+ remark Accept outbound DNS queries from DNS servers
+ permit tcp host 10.0.0.5 any eq 53
+ permit udp host 10.0.0.5 any eq 53
+ permit tcp host 10.0.0.6 any eq 53
+ permit udp host 10.0.0.6 any eq 53
+ permit tcp host 192.168.1.10 any eq 53
+ permit udp host 192.168.1.10 any eq 53
+
+
+ remark accept-outbound-dhcp
+ remark Accept outbound DHCP responses from DHCP servers
+ permit udp host 192.168.1.10 any eq 67
+ permit udp host 192.168.1.10 any eq 68
+ permit udp host 192.168.1.11 any eq 67
+ permit udp host 192.168.1.11 any eq 68
+
+
+ remark default-accept
+ permit ip any any
+
+exit
+
+no ipv6 access-list ipv6-BASIC_DATA_SRVC_OUT
+ipv6 access-list ipv6-BASIC_DATA_SRVC_OUT
+ remark $Id:$
+ remark Basic data services outbound
+
+
+ remark default-accept
+ permit ipv6 any any
+
+exit

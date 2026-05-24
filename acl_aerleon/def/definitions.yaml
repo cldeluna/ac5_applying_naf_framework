@@ -1,0 +1,56 @@
+---
+networks:
+  RFC1918:
+    values:
+      - address: 10.0.0.0/8
+      - address: 172.16.0.0/12
+      - address: 192.168.0.0/16
+  WEB_SERVERS:
+    values:
+      - address: 10.0.0.1/32
+        comment: Web Server 1
+      - address: 10.0.0.2/32
+        comment: Web Server 2
+      - address: 192.168.1.10/32
+        comment: Web Server 3
+  MAIL_SERVERS:
+    values:
+      - address: 10.0.0.3/32
+        comment: Mail Server 1
+      - address: 10.0.0.4/32
+        comment: Mail Server 2
+  ALL_SERVERS:
+    values:
+      - WEB_SERVERS
+      - MAIL_SERVERS
+  RFC5737:
+    values:
+      - address: 192.0.2.0/24
+        comment: TEST-NET-1 (RFC 5737)
+      - address: 198.51.100.0/24
+        comment: TEST-NET-2 (RFC 5737)
+      - address: 203.0.113.0/24
+        comment: TEST-NET-3 (RFC 5737)
+      - address: 2001:DB8::/32
+        comment: IPv6 documentation prefix (RFC 3849)
+services:
+  HTTP:
+    - protocol: tcp
+      port: 80
+  HTTPS:
+    - protocol: tcp
+      port: 443
+  WEB:
+    - HTTP
+    - HTTPS
+  HIGH_PORTS:
+    - port: 1024-65535
+      protocol: tcp
+    - port: 1024-65535
+      protocol: udp
+scope:
+  BASIC_SERVICES_POLICY:
+    - All Data SVIs on Core or Distribution Switches at a location
+service_impact:
+  BASIC_SERVICES_POLICY:
+    - Can impact WEB, DNS, DHCP services across all Data SVIs at a location.

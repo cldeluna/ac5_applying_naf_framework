@@ -1,0 +1,25 @@
+filters_include_only:
+- header:
+    comment: DNS inbound
+    targets:
+      cisco: BASIC_DATA_SRVC_IN extended
+      arista: BASIC_DATA_SRVC_IN
+  terms:
+    - name: accept-inbound-dns
+      comment: Accept inbound DNS queries to DNS servers
+      destination-address: DNS_SERVERS
+      destination-port: DNS
+      protocol: tcp udp
+      action: accept
+- header:
+    comment: DNS outbound
+    targets:
+      cisco: BASIC_DATA_SRVC_OUT mixed
+      arista: BASIC_DATA_SRVC_OUT mixed
+  terms:
+    - name: accept-outbound-dns
+      comment: Accept outbound DNS queries from DNS servers
+      source-address: DNS_SERVERS
+      destination-port: DNS
+      protocol: tcp udp
+      action: accept
