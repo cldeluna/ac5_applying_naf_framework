@@ -87,6 +87,85 @@ def build_apply_commands(svis: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def find_stale_acl_interfaces(snapshot: dict, acl_names: list) -> dict:
+    """Find interfaces that have managed ACLs applied but are NOT Data SVIs.
+
+    These are orphaned/stale ACL applications — the ACL is bound to an interface
+    that is either not routed (no ip address) or has no 'data' description.  They
+    should be removed so the device is in a clean known state.
+
+    Args:
+        snapshot: Pre-change state dict from state.capture_location_state().
+        acl_names: List of managed ACL names to detect (e.g. [ACL_NAME, ACL_NAME_OUT]).
+
+    Returns:
+        Dict keyed by hostname.  Each value is a dict with 'address' and 'ifaces'
+        (list of dicts with 'interface', 'stale_acl_in', 'stale_acl_out', 'has_ip').
+    """
+    stale = {}
+    acl_set = set(acl_names)
+
+    for hostname, dev in snapshot.get("devices", {}).items():
+        data_svi_ifaces = {s["interface"] for s in dev.get("data_svis", [])}
+        running = dev.get("running_config_svis", "")
+
+        current_iface = None
+        iface_data = {}
+        for line in running.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("interface "):
+                current_iface = stripped.split(None, 1)[1]
+                iface_data[current_iface] = {"acl_in": None, "acl_out": None, "has_ip": False}
+            elif current_iface:
+                if stripped.startswith("ip address "):
+                    iface_data[current_iface]["has_ip"] = True
+                elif "ip access-group " in stripped and not stripped.startswith("no "):
+                    parts = stripped.split()
+                    if len(parts) >= 4 and parts[:2] == ["ip", "access-group"]:
+                        acl_name, direction = parts[2], parts[3]
+                        if acl_name in acl_set:
+                            if direction == "in":
+                                iface_data[current_iface]["acl_in"] = acl_name
+                            elif direction == "out":
+                                iface_data[current_iface]["acl_out"] = acl_name
+
+        device_stale = [
+            {
+                "interface": iface,
+                "stale_acl_in": data["acl_in"],
+                "stale_acl_out": data["acl_out"],
+                "has_ip": data["has_ip"],
+            }
+            for iface, data in iface_data.items()
+            if iface not in data_svi_ifaces and (data["acl_in"] or data["acl_out"])
+        ]
+        if device_stale:
+            stale[hostname] = {"address": dev.get("address", "?"), "ifaces": device_stale}
+
+    return stale
+
+
+def build_stale_cleanup_commands(stale_ifaces: list) -> str:
+    """Generate no ip access-group commands to remove managed ACLs from non-Data SVIs.
+
+    Args:
+        stale_ifaces: List of iface dicts from find_stale_acl_interfaces() for one device.
+
+    Returns:
+        IOS config string.
+    """
+    lines = ["!", "! Remove managed ACLs from non-Data SVIs (stale cleanup)", "!"]
+    for iface in stale_ifaces:
+        lines.append(f"interface {iface['interface']}")
+        if iface.get("stale_acl_in"):
+            lines.append(f" no ip access-group {iface['stale_acl_in']} in")
+        if iface.get("stale_acl_out"):
+            lines.append(f" no ip access-group {iface['stale_acl_out']} out")
+        lines.append(" exit")
+    lines.append("!")
+    return "\n".join(lines)
+
+
 def build_rollback_config_for_device(
     svis: list[dict],
     pre_config: dict[str, str],
@@ -660,6 +739,18 @@ def main(args: argparse.Namespace) -> int:
         for svi in dev_state.get("data_svis", []):
             all_svis.append({"hostname": dev_state.get("hostname", "unknown"), **svi})
 
+    stale_interfaces = find_stale_acl_interfaces(snapshot, [ACL_NAME, ACL_NAME_OUT])
+    if stale_interfaces:
+        print(f"\n  NOTE: Managed ACLs found on non-Data SVIs — will be removed in Step 8:")
+        for hn, data in stale_interfaces.items():
+            for iface in data["ifaces"]:
+                ip_note = "" if iface["has_ip"] else " [no ip address — ACL has no routing effect]"
+                print(f"    {hn}  {iface['interface']}{ip_note}")
+                if iface["stale_acl_in"]:
+                    print(f"      in:  {iface['stale_acl_in']}  → will be removed")
+                if iface["stale_acl_out"]:
+                    print(f"      out: {iface['stale_acl_out']}  → will be removed")
+
     if not all_svis:
         print("\nWARNING: No Data SVIs found on any device at this location.")
         print("  Cannot determine target interfaces — aborting.")
@@ -703,6 +794,7 @@ def main(args: argparse.Namespace) -> int:
         args.location, devices, impact_data, acl_artifact, args.engine, OUTPUT_DIR,
         data_svis=all_svis,
         pre_change_snapshot=snapshot,
+        stale_interfaces=stale_interfaces,
     )
     print(f"Change record: {cr_path}")
     print("\nAction required:")
@@ -776,6 +868,17 @@ def main(args: argparse.Namespace) -> int:
     # Step 8 — Push update to scope
     # ------------------------------------------------------------------
     step_banner(8, "Push Update to Scope")
+    if stale_interfaces:
+        print("  Removing stale ACL applications from non-Data SVIs ...")
+        for hn, data in stale_interfaces.items():
+            device = next((d for d in devices if d["hostname"] == hn), None)
+            if device:
+                cleanup_cfg = build_stale_cleanup_commands(data["ifaces"])
+                print(f"  Cleanup push → {hn} ({data['address']})")
+                run_push_validate_loop(
+                    [device], username, password, cleanup_cfg,
+                    [ACL_NAME, ACL_NAME_OUT], default_port=net_device_port,
+                )
     push_results = run_push_validate_loop(
         devices, username, password, acl_artifact,
         [ACL_NAME, ACL_NAME_OUT], default_port=net_device_port,

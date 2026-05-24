@@ -86,18 +86,19 @@ def _acl_names_from_artifact(artifact: str) -> list:
     return names
 
 
-def _build_delta_section(snapshot: dict, acl_artifact: str) -> str:
+def _build_delta_section(snapshot: dict, acl_artifact: str, stale_interfaces: dict | None = None) -> str:
     """Build the CURRENT STATE vs. PROPOSED CHANGES block for the change record.
 
     For each device in the snapshot:
-    - Devices with no Data SVIs: explain WHY (SVI exists but missing 'data' description)
-      so the engineer knows what to fix if that device should be in scope.
+    - Devices with stale ACL applications (managed ACL on a non-Data SVI): show the
+      exact cleanup commands that will be pushed in Step 8.
     - Devices with Data SVIs: show per-ACL REMOVED / ADDED / UNCHANGED ACE counts
       with port-name normalization so semantic equivalence is detected correctly.
 
     Args:
         snapshot: Pre-change state dict (loaded from the JSON snapshot file).
         acl_artifact: Rendered ACL configuration string from the artifact engine.
+        stale_interfaces: Dict from find_stale_acl_interfaces(); keyed by hostname.
 
     Returns:
         Formatted string block ready to embed in the change record.
@@ -106,6 +107,7 @@ def _build_delta_section(snapshot: dict, acl_artifact: str) -> str:
         return ""
 
     acl_names = _acl_names_from_artifact(acl_artifact)
+    stale = stale_interfaces or {}
 
     out = [
         "",
@@ -118,16 +120,20 @@ def _build_delta_section(snapshot: dict, acl_artifact: str) -> str:
         data_svis = dev.get("data_svis", [])
 
         if not data_svis:
-            running = dev.get("running_config_svis", "")
-            applied = [n for n in acl_names if n in running]
-            if applied:
-                out.append("  WARNING: No Data SVIs detected — this device will NOT receive the new ACL.")
-                out.append("  The following ACLs are applied on this device but no SVI has 'data' in its description:")
-                for n in applied:
-                    out.append(f"    {n}")
-                out.append("  ACTION: Add 'data' to the SVI description (e.g. 'description <name> data') to include it.")
+            if hostname in stale:
+                out.append("  STALE ACL CLEANUP — managed ACLs on non-Data SVI(s) will be REMOVED in Step 8:")
+                for iface in stale[hostname]["ifaces"]:
+                    ip_note = "" if iface["has_ip"] else "  [no ip address — ACL has no routing effect]"
+                    out.append(f"  interface {iface['interface']}{ip_note}")
+                    if iface.get("stale_acl_in"):
+                        out.append(f"    {iface['stale_acl_in']} in  →  no ip access-group {iface['stale_acl_in']} in")
+                    if iface.get("stale_acl_out"):
+                        out.append(f"    {iface['stale_acl_out']} out →  no ip access-group {iface['stale_acl_out']} out")
+                out.append("  Cleanup commands pushed to this device (Step 8, before main ACL push):")
+                for line in build_stale_cleanup_text(stale[hostname]["ifaces"]).splitlines():
+                    out.append(f"    {line}")
             else:
-                out.append("  No Data SVIs and no matching ACLs detected — no changes will be applied.")
+                out.append("  No Data SVIs and no managed ACLs detected — no changes will be applied.")
             continue
 
         for svi in data_svis:
@@ -166,6 +172,20 @@ def _build_delta_section(snapshot: dict, acl_artifact: str) -> str:
     return "\n".join(out)
 
 
+def build_stale_cleanup_text(stale_ifaces: list) -> str:
+    """Format the stale cleanup IOS commands for embedding in the change record."""
+    lines = ["!", "! Remove managed ACLs from non-Data SVIs (stale cleanup)", "!"]
+    for iface in stale_ifaces:
+        lines.append(f"interface {iface['interface']}")
+        if iface.get("stale_acl_in"):
+            lines.append(f" no ip access-group {iface['stale_acl_in']} in")
+        if iface.get("stale_acl_out"):
+            lines.append(f" no ip access-group {iface['stale_acl_out']} out")
+        lines.append(" exit")
+    lines.append("!")
+    return "\n".join(lines)
+
+
 def build_change_record(
     location: str,
     devices: list[dict],
@@ -175,6 +195,7 @@ def build_change_record(
     output_dir: str = "./output",
     data_svis: list[dict] | None = None,
     pre_change_snapshot: dict | None = None,
+    stale_interfaces: dict | None = None,
 ) -> str:
     """Build change record text and save to file.
 
@@ -188,6 +209,8 @@ def build_change_record(
         data_svis: List of Data SVI dicts from pre-change state snapshot.
         pre_change_snapshot: Full snapshot dict from state.capture_location_state();
             when provided a CURRENT STATE vs. PROPOSED CHANGES diff is appended.
+        stale_interfaces: Dict from find_stale_acl_interfaces(); used in the delta
+            section to show which non-Data SVI ACL applications will be removed.
 
     Returns:
         Path to the written change record file.
@@ -213,7 +236,7 @@ def build_change_record(
         f"  - {d['hostname']} ({d['address']})" for d in devices
     )
 
-    delta_section = _build_delta_section(pre_change_snapshot, acl_artifact) if pre_change_snapshot else ""
+    delta_section = _build_delta_section(pre_change_snapshot, acl_artifact, stale_interfaces) if pre_change_snapshot else ""
 
     cr_text = f"""CHANGE RECORD
 =============
