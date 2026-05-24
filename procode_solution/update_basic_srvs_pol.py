@@ -686,21 +686,31 @@ def main(args: argparse.Namespace) -> int:
     }
 
     dotenv.load_dotenv(ENV_FILE)
-    username = args.username or os.environ.get("NET_DEVICE_USERNAME")
-    password = args.password or os.environ.get("NET_DEVICE_PASSWORD")
+    clab_port = int(os.environ.get("CLAB_PORT", "20512"))
+    is_clab = any(d.get("port") == clab_port for d in devices)
+    if is_clab:
+        username = args.username or os.environ.get("CLAB_USER") or os.environ.get("NET_DEVICE_USERNAME")
+        password = args.password or os.environ.get("CLAB_PASSWORD") or os.environ.get("NET_DEVICE_PASSWORD")
+        cred_source = "CLAB_USER / CLAB_PASSWORD"
+    else:
+        username = args.username or os.environ.get("NET_DEVICE_USERNAME")
+        password = args.password or os.environ.get("NET_DEVICE_PASSWORD")
+        cred_source = "NET_DEVICE_USERNAME / NET_DEVICE_PASSWORD"
     net_device_port = int(os.environ.get("NET_DEVICE_PORT", "22"))
-    missing = [v for v, val in [("NET_DEVICE_USERNAME", username), ("NET_DEVICE_PASSWORD", password)] if not val]
+    missing = [v for v, val in [("username", username), ("password", password)] if not val]
     if missing:
-        print(f"ERROR: missing credentials — set {', '.join(missing)} in {ENV_FILE} or pass --username/--password.")
+        print(f"ERROR: missing credentials ({', '.join(missing)}) — check {ENV_FILE}.")
+        print(f"  Expected env vars: {cred_source}")
         return 1
 
     # ------------------------------------------------------------------
     # Step 2 — Trigger
     # ------------------------------------------------------------------
     step_banner(2, "Trigger")
-    print(f"Location : {args.location}")
-    print(f"Devices  : {len(devices)}")
-    print(f"Engine   : {args.engine}")
+    print(f"Location      : {args.location}")
+    print(f"Devices       : {len(devices)}")
+    print(f"Engine        : {args.engine}")
+    print(f"Credentials   : {cred_source}{' (CLAB location detected)' if is_clab else ''}")
     print(f"Dry-run       : {args.dry_run}")
     print(f"Remove tech debt: {args.remove_tech_debt}")
 
