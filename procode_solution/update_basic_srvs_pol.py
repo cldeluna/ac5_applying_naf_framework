@@ -348,22 +348,12 @@ def build_artifact_jinja2(definitions_dir: str, output_dir: str) -> str:
         for e in defs.get("networks", {}).get("WEB_SERVERS", {}).get("values", [])
         if "address" in e
     ]
-    rfc1918_networks = [
-        {
-            "network": str(ipaddress.ip_network(e["address"], strict=False).network_address),
-            "wildcard": str(ipaddress.ip_network(e["address"], strict=False).hostmask),
-        }
-        for e in defs.get("networks", {}).get("RFC1918", {}).get("values", [])
-        if "address" in e
-    ]
-
     env = jinja2.Environment(loader=jinja2.FileSystemLoader(TEMPLATES_DIR))
     template = env.get_template("basic_services_acl.j2")
     rendered = template.render(
         dns_servers=dns_servers,
         dhcp_servers=dhcp_servers,
         web_servers=web_servers,
-        rfc1918_networks=rfc1918_networks,
     )
 
     os.makedirs(output_dir, exist_ok=True)
