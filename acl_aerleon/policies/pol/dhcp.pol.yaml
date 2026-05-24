@@ -1,0 +1,31 @@
+filters_include_only:
+- header:
+    comment: DHCP inbound
+    targets:
+      cisco: BASIC_DATA_SRVC_IN extended
+      arista: BASIC_DATA_SRVC_IN
+  terms:
+    - name: accept-dhcp-client-broadcast
+      comment: Accept DHCP client broadcasts (DISCOVER/REQUEST) before ip helper-address relay converts to unicast
+      destination-address: DHCP_CLIENT_BROADCAST
+      destination-port: DHCP
+      protocol: udp
+      action: accept
+    - name: accept-inbound-dhcp
+      comment: Accept inbound DHCP requests to DHCP servers (unicast renewals)
+      destination-address: DHCP_SERVERS
+      destination-port: DHCP
+      protocol: udp
+      action: accept
+- header:
+    comment: DHCP outbound
+    targets:
+      cisco: BASIC_DATA_SRVC_OUT mixed
+      arista: BASIC_DATA_SRVC_OUT mixed
+  terms:
+    - name: accept-outbound-dhcp
+      comment: Accept outbound DHCP responses from DHCP servers
+      source-address: DHCP_SERVERS
+      destination-port: DHCP
+      protocol: udp
+      action: accept

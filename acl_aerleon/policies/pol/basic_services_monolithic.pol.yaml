@@ -1,0 +1,57 @@
+filters:
+- header:
+    comment: Basic data services inbound
+    targets:
+      cisco: BASIC_DATA_SRVC_IN extended
+      arista: BASIC_DATA_SRVC_IN
+  terms:
+    - name: accept-web-servers
+      comment: Accept connections to our web servers
+      destination-address: WEB_SERVERS
+      destination-port: WEB
+      protocol: tcp
+      action: accept
+    - name: accept-inbound-dns
+      comment: Accept inbound DNS queries to DNS servers
+      destination-address: DNS_SERVERS
+      destination-port: DNS
+      protocol: tcp udp
+      action: accept
+    - name: accept-dhcp-client-broadcast
+      comment: Accept DHCP client broadcasts (DISCOVER/REQUEST) before ip helper-address relay converts to unicast
+      destination-address: DHCP_CLIENT_BROADCAST
+      destination-port: DHCP
+      protocol: udp
+      action: accept
+    - name: accept-inbound-dhcp
+      comment: Accept inbound DHCP requests to DHCP servers (unicast renewals)
+      destination-address: DHCP_SERVERS
+      destination-port: DHCP
+      protocol: udp
+      action: accept
+    - name: default-deny
+      comment: Deny anything else.
+      action: deny
+- header:
+    comment: Basic data services outbound
+    targets:
+      cisco: BASIC_DATA_SRVC_OUT mixed
+      arista: BASIC_DATA_SRVC_OUT mixed
+  terms:
+    - name: deny-bad-destinations
+      destination-address: RFC1918
+      action: deny
+    - name: accept-outbound-dns
+      comment: Accept outbound DNS queries from DNS servers
+      source-address: DNS_SERVERS
+      destination-port: DNS
+      protocol: tcp udp
+      action: accept
+    - name: accept-outbound-dhcp
+      comment: Accept outbound DHCP responses from DHCP servers
+      source-address: DHCP_SERVERS
+      destination-port: DHCP
+      protocol: udp
+      action: accept
+    - name: default-accept
+      action: accept

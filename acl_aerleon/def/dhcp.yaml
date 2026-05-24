@@ -6,6 +6,10 @@ networks:
         comment: DHCP Server 1
       - address: 192.168.1.11/32
         comment: DHCP Server 2
+  DHCP_CLIENT_BROADCAST:
+    values:
+      - address: 255.255.255.255/32
+        comment: DHCP client broadcast (DISCOVER and REQUEST sent before relay converts to unicast)
 services:
   DHCP:
     - protocol: udp
