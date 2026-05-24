@@ -701,7 +701,8 @@ def main(args: argparse.Namespace) -> int:
     print(f"Location : {args.location}")
     print(f"Devices  : {len(devices)}")
     print(f"Engine   : {args.engine}")
-    print(f"Dry-run  : {args.dry_run}")
+    print(f"Dry-run       : {args.dry_run}")
+    print(f"Remove tech debt: {args.remove_tech_debt}")
 
     # ------------------------------------------------------------------
     # Step 3 — Build configuration artifact
@@ -741,15 +742,19 @@ def main(args: argparse.Namespace) -> int:
 
     stale_interfaces = find_stale_acl_interfaces(snapshot, [ACL_NAME, ACL_NAME_OUT])
     if stale_interfaces:
-        print(f"\n  NOTE: Managed ACLs found on non-Data SVIs — will be removed in Step 8:")
+        if args.remove_tech_debt:
+            action_note = "WILL BE REMOVED in Step 8 (--remove-tech-debt is set)"
+        else:
+            action_note = "NOT removing (re-run with --remove-tech-debt to clean up)"
+        print(f"\n  TECHNICAL DEBT DETECTED — {action_note}:")
         for hn, data in stale_interfaces.items():
             for iface in data["ifaces"]:
                 ip_note = "" if iface["has_ip"] else " [no ip address — ACL has no routing effect]"
                 print(f"    {hn}  {iface['interface']}{ip_note}")
                 if iface["stale_acl_in"]:
-                    print(f"      in:  {iface['stale_acl_in']}  → will be removed")
+                    print(f"      in:  {iface['stale_acl_in']}")
                 if iface["stale_acl_out"]:
-                    print(f"      out: {iface['stale_acl_out']}  → will be removed")
+                    print(f"      out: {iface['stale_acl_out']}")
 
     if not all_svis:
         print("\nWARNING: No Data SVIs found on any device at this location.")
@@ -795,6 +800,7 @@ def main(args: argparse.Namespace) -> int:
         data_svis=all_svis,
         pre_change_snapshot=snapshot,
         stale_interfaces=stale_interfaces,
+        remove_tech_debt=args.remove_tech_debt,
     )
     print(f"Change record: {cr_path}")
     print("\nAction required:")
@@ -868,17 +874,20 @@ def main(args: argparse.Namespace) -> int:
     # Step 8 — Push update to scope
     # ------------------------------------------------------------------
     step_banner(8, "Push Update to Scope")
-    if stale_interfaces:
-        print("  Removing stale ACL applications from non-Data SVIs ...")
+    if stale_interfaces and args.remove_tech_debt:
+        print("  Removing technical debt — stale ACL applications from non-Data SVIs ...")
         for hn, data in stale_interfaces.items():
             device = next((d for d in devices if d["hostname"] == hn), None)
             if device:
                 cleanup_cfg = build_stale_cleanup_commands(data["ifaces"])
-                print(f"  Cleanup push → {hn} ({data['address']})")
+                print(f"  Tech-debt cleanup push → {hn} ({data['address']})")
                 run_push_validate_loop(
                     [device], username, password, cleanup_cfg,
                     [ACL_NAME, ACL_NAME_OUT], default_port=net_device_port,
                 )
+    elif stale_interfaces:
+        print("  NOTE: Technical debt (stale ACL applications) detected but NOT removed.")
+        print("        Re-run with --remove-tech-debt to remove them.")
     push_results = run_push_validate_loop(
         devices, username, password, acl_artifact,
         [ACL_NAME, ACL_NAME_OUT], default_port=net_device_port,
@@ -981,6 +990,16 @@ if __name__ == '__main__':
         "--password",
         default=None,
         help="SSH password (prompted if not provided)",
+    )
+    parser.add_argument(
+        "--remove-tech-debt",
+        action="store_true",
+        default=False,
+        help=(
+            "Remove technical debt: orphaned ACL applications on non-Data SVIs, "
+            "interfaces without IP addresses, and switches with no Data VLANs. "
+            "Defaults to OFF — must be set explicitly as a deliberate act."
+        ),
     )
     arguments = parser.parse_args()
     sys.exit(main(arguments))

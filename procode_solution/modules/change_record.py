@@ -86,7 +86,7 @@ def _acl_names_from_artifact(artifact: str) -> list:
     return names
 
 
-def _build_delta_section(snapshot: dict, acl_artifact: str, stale_interfaces: dict | None = None) -> str:
+def _build_delta_section(snapshot: dict, acl_artifact: str, stale_interfaces: dict | None = None, remove_tech_debt: bool = False) -> str:
     """Build the CURRENT STATE vs. PROPOSED CHANGES block for the change record.
 
     For each device in the snapshot:
@@ -121,7 +121,11 @@ def _build_delta_section(snapshot: dict, acl_artifact: str, stale_interfaces: di
 
         if not data_svis:
             if hostname in stale:
-                out.append("  STALE ACL CLEANUP — managed ACLs on non-Data SVI(s) will be REMOVED in Step 8:")
+                if remove_tech_debt:
+                    out.append("  TECHNICAL DEBT REMOVAL — managed ACLs on non-Data SVI(s) WILL BE REMOVED in Step 8:")
+                else:
+                    out.append("  TECHNICAL DEBT DETECTED — managed ACLs on non-Data SVI(s) — NOT removing this run.")
+                    out.append("  Re-run with --remove-tech-debt to remove these orphaned ACL applications.")
                 for iface in stale[hostname]["ifaces"]:
                     ip_note = "" if iface["has_ip"] else "  [no ip address — ACL has no routing effect]"
                     out.append(f"  interface {iface['interface']}{ip_note}")
@@ -129,9 +133,14 @@ def _build_delta_section(snapshot: dict, acl_artifact: str, stale_interfaces: di
                         out.append(f"    {iface['stale_acl_in']} in  →  no ip access-group {iface['stale_acl_in']} in")
                     if iface.get("stale_acl_out"):
                         out.append(f"    {iface['stale_acl_out']} out →  no ip access-group {iface['stale_acl_out']} out")
-                out.append("  Cleanup commands pushed to this device (Step 8, before main ACL push):")
-                for line in build_stale_cleanup_text(stale[hostname]["ifaces"]).splitlines():
-                    out.append(f"    {line}")
+                if remove_tech_debt:
+                    out.append("  Commands pushed to this device (Step 8, before main ACL push):")
+                    for line in build_stale_cleanup_text(stale[hostname]["ifaces"]).splitlines():
+                        out.append(f"    {line}")
+                else:
+                    out.append("  Commands that WOULD be pushed with --remove-tech-debt:")
+                    for line in build_stale_cleanup_text(stale[hostname]["ifaces"]).splitlines():
+                        out.append(f"    {line}")
             else:
                 out.append("  No Data SVIs and no managed ACLs detected — no changes will be applied.")
             continue
@@ -196,6 +205,7 @@ def build_change_record(
     data_svis: list[dict] | None = None,
     pre_change_snapshot: dict | None = None,
     stale_interfaces: dict | None = None,
+    remove_tech_debt: bool = False,
 ) -> str:
     """Build change record text and save to file.
 
@@ -210,7 +220,9 @@ def build_change_record(
         pre_change_snapshot: Full snapshot dict from state.capture_location_state();
             when provided a CURRENT STATE vs. PROPOSED CHANGES diff is appended.
         stale_interfaces: Dict from find_stale_acl_interfaces(); used in the delta
-            section to show which non-Data SVI ACL applications will be removed.
+            section to show which non-Data SVI ACL applications were detected.
+        remove_tech_debt: When True, the cleanup will be pushed and the change record
+            reflects that.  When False (default), debt is documented but not removed.
 
     Returns:
         Path to the written change record file.
@@ -236,7 +248,7 @@ def build_change_record(
         f"  - {d['hostname']} ({d['address']})" for d in devices
     )
 
-    delta_section = _build_delta_section(pre_change_snapshot, acl_artifact, stale_interfaces) if pre_change_snapshot else ""
+    delta_section = _build_delta_section(pre_change_snapshot, acl_artifact, stale_interfaces, remove_tech_debt) if pre_change_snapshot else ""
 
     cr_text = f"""CHANGE RECORD
 =============
