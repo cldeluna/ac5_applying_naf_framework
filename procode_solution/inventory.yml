@@ -104,3 +104,9 @@ UWACO_PacificHQ_TEST:
   - hostname: seaofcortez-sw01
     address: 10.1.10.66
     role: access
+
+UWACO_PacificHQ_CLAB:
+  - hostname: core-sw1
+    address: 74.208.184.140
+    port: 20512
+    role: core
