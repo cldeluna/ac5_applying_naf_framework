@@ -210,7 +210,7 @@ engineer reviews the output, not the steps.
 
 | Mission | Status | Notes |
 |---|---|---|
-| ☑ Mercury | ✅ **Complete** | Templates under version control, payload generation, lab test, production push — all present |
+| ☑ Mercury | ✅ **Complete** | Worflow defined at a sufficiently high level, templates under version control, change control artefacts, payload generation, lab test, production push — all present |
 | ☑ Gemini 1–4 | ✅ **Complete** | State extraction, config generation, lab validation, and push all operate at location scale |
 | ⚡ Gemini 5 | ⚡ **Partial** | Change record is machine-generated and ACL diff is automated; post-push verification (`verify.py`) is a stub |
 | ⚡ Gemini 6 | ⚡ **Partial** | 12-step workflow is orchestrated in a single script; CI/CD, ITSM API, and parallel push are missing |
@@ -247,7 +247,7 @@ faster than one starting from scratch.
 ### What This Pipeline Does Well
 
 - **Intent is version-controlled** — Policy lives in plain-text YAML files in
-  git, not in web forms or human heads. Changes go through pull requests.
+  git, not in web forms, spreadsheets, or human heads. Changes go through pull requests.
   Every engineer can read the repository and understand what the network is
   supposed to do and why.
 
