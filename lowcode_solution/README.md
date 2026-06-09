@@ -9,19 +9,26 @@ Infrahub Proposed Change
     -> merge to main
         -> webhook POST to receiver
             -> Prefect creates flow run
-                -> flow queries Infrahub for DHCP IPs
+                -> flow queries Infrahub for DHCP server InfraDevice nodes
                     -> builds ACL artifact
-                        -> Steps 3-12 of NAF workflow
+                        -> ContainerLab syntax/lab validation
+                            -> push to scope (Netmiko)
+                                -> SuzieQ current state + post-change validation
+                                    -> ServiceNow ticket creation and closeout
 ```
 
 NAF framework mapping:
 
 | Component | NAF Block |
 |-----------|-----------|
-| Infrahub DHCP Server records + Proposed Change | INTENT |
+| Infrahub DHCP Server InfraDevice nodes + Proposed Change | INTENT |
 | Infrahub webhook on `proposed_change.merged` | ORCHESTRATION / PRESENTATION |
 | `webhook_receiver.py` (FastAPI) | ORCHESTRATION |
-| `acl_lifecycle_flow.py` (Prefect) | ORCHESTRATION / EXECUTOR / OBSERVABILITY / COLLECTOR |
+| `acl_lifecycle_flow.py` (Prefect) | ORCHESTRATION |
+| ContainerLab | INTENT / COLLECTOR |
+| Netmiko | EXECUTOR |
+| SuzieQ (REST API) | OBSERVABILITY / COLLECTOR |
+| ServiceNow (REST API) | ORCHESTRATION / INTENT |
 
 ---
 
@@ -53,13 +60,24 @@ uv sync
 
 | File | Purpose |
 |------|---------|
-| `lowcode_solution/acl_lifecycle_flow.py` | Prefect flow — reads DHCP IPs from Infrahub, runs 12-step workflow |
+| `lowcode_solution/acl_lifecycle_flow.py` | Prefect flow — orchestrates all 12 NAF workflow steps |
 | `lowcode_solution/webhook_receiver.py` | FastAPI server — receives Infrahub webhooks, triggers Prefect |
-| `lowcode_solution/test.py` | Smoke test — runs the flow with stub data, no Infrahub or devices needed |
+| `lowcode_solution/test.py` | Smoke test — runs the flow with stub data, no live services needed |
 | `lowcode_solution/.netmiko.yml` | Device inventory for the muc site (core01, access01) |
 | `provisioning/infrahub_dhcp_upsert.py` | Populates the Production_DHCP namespace with baseline DHCP server IPs |
+| `provisioning/infrahub_dhcp_device_upsert.py` | Upserts DHCP servers as InfraDevice nodes (branch-aware source of truth) |
 | `provisioning/infrahub_muc_upsert.py` | Creates the muc site and its devices in Infrahub |
-| `provisioning/infrahub_dhcp_propose.py` | Creates a branch, adds new DHCP server, opens a Proposed Change |
+| `provisioning/infrahub_dhcp_propose.py` | Creates a branch, opens a Proposed Change for a new DHCP server |
+
+### External Services
+
+| Service | Interface | NAF Block | Role |
+|---------|-----------|-----------|------|
+| **Infrahub** | GraphQL API | INTENT | Source of truth for DHCP server InfraDevice nodes; Proposed Change for change management |
+| **ContainerLab** | Netmiko SSH | INTENT / COLLECTOR | Lab validation at scale=1 before production push |
+| **Netmiko** | SSH | EXECUTOR | Push ACL configuration to in-scope devices |
+| **SuzieQ** | REST API | OBSERVABILITY / COLLECTOR | Pre-change current state capture; post-change verification and rollback validation |
+| **ServiceNow** | REST API | ORCHESTRATION / INTENT | Change record creation (Step 6) and ticket closeout (Step 12) |
 
 ---
 

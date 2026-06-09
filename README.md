@@ -48,14 +48,17 @@ Uses **Tines** as the no-code orchestration platform. A Tines Story accepts a li
 
 [`lowcode_solution/`](lowcode_solution/)
 
-Uses **Prefect** as the workflow orchestrator and **Infrahub** as the source of truth. When the DNS team adds a new DHCP server device in Infrahub and merges a Proposed Change, Infrahub fires a webhook that triggers the Prefect ACL lifecycle flow automatically. MCP servers bridge the AI assistant to Infrahub and the network devices.
+Uses **Prefect** as the workflow orchestrator and **Infrahub** as the source of truth. When the DNS team adds a new DHCP server device in Infrahub and merges a Proposed Change, Infrahub fires a webhook that triggers the Prefect ACL lifecycle flow automatically. Additional services — ContainerLab, Netmiko, SuzieQ, and ServiceNow — are integrated via their REST APIs to cover lab validation, device push, observability, and change management.
 
 | | |
 |---|---|
 | Trigger | Infrahub Proposed Change merge webhook |
-| ACL generation | Jinja2 / aerleon |
 | Source of truth | Infrahub InfraDevice nodes |
-| Device push | Netmiko (stubbed; wired in pro-code) |
+| ACL generation | Jinja2 / aerleon |
+| Lab validation | ContainerLab |
+| Device push | Netmiko |
+| Observability | SuzieQ (REST API) |
+| Change management | ServiceNow (REST API) |
 
 ### Pro-Code — Python
 
@@ -90,10 +93,12 @@ Uses an AI assistant with **MCP (Model Context Protocol) servers** as the integr
 
 | Capability | No-Code | Low-Code | Pro-Code | AI |
 |---|---|---|---|---|
-| Trigger | Web form / webhook | Infrahub PR merge | Manual CLI | Natural language |
-| Source of truth | Operator input | Infrahub | YAML files | Infrahub via MCP |
+| Trigger | Web form / webhook | Infrahub PR merge webhook | Manual CLI | Natural language |
+| Source of truth | Operator input | Infrahub (InfraDevice) | YAML files | Infrahub via MCP |
 | ACL generation | Tines actions | Jinja2 / aerleon | Jinja2 / aerleon | AI-generated |
-| Observability | None | None | Netmiko + TextFSM | SuzieQ via MCP |
-| Device push | Manual | Stubbed | Netmiko | Netmiko via MCP |
-| Change record | Copy-paste output | Prefect run log | JSON + text file | AI-drafted |
+| Lab validation | None | ContainerLab | ContainerLab + Netmiko | AI-assisted via MCP |
+| Observability | None | SuzieQ (REST) | Netmiko + TextFSM | SuzieQ via MCP |
+| Device push | Manual | Netmiko | Netmiko | Netmiko via MCP |
+| Change management | None | ServiceNow (REST) | Text file (manual entry) | AI-drafted |
+| Change record | Copy-paste output | ServiceNow ticket | JSON + text file | AI-drafted |
 | Programming required | None | Minimal | Python | None |

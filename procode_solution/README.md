@@ -440,11 +440,11 @@ Only L3 devices (by role resolution above) are included. Within those devices, o
 | Trigger | Manual CLI | Infrahub Proposed Change merge webhook | Natural language |
 | Source of truth | YAML files in Git | Infrahub InfraDevice nodes | Infrahub via MCP |
 | ACL generation | Jinja2 / aerleon | Jinja2 / aerleon | AI-generated |
-| Observability | Netmiko + TextFSM | None (stubbed) | SuzieQ via MCP |
-| Lab validation | ContainerLab + Netmiko | Stubbed | AI-assisted via MCP |
-| Device push | Netmiko | Stubbed | Netmiko via MCP |
-| Rollback | Smart per-device rollback | Not implemented | AI-reasoned |
-| Change record | JSON + ticket narrative text | Prefect run log | AI-drafted |
+| Lab validation | ContainerLab + Netmiko | ContainerLab | AI-assisted via MCP |
+| Observability | Netmiko + TextFSM | SuzieQ REST API | SuzieQ via MCP |
+| Device push | Netmiko | Netmiko | Netmiko via MCP |
+| Change management | Text file (manual ITSM entry) | ServiceNow REST API | AI-drafted |
+| Rollback | Smart per-device rollback | SuzieQ-validated rollback | AI-reasoned |
 | Programming required | Python | Minimal | None |
 
 **What this tier gives you that lower tiers do not:** full device lifecycle — lab validation, production push, verification, rollback, and structured output files — all in a single run. Every step is explicit, auditable, and debuggable.
