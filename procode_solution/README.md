@@ -1,4 +1,8 @@
-# Pro Code Solution — `update_basic_srvs_pol.py`
+# Pro-Code Solution — `update_basic_srvs_pol.py`
+
+> **Solution tier:** Pro-Code (Python) — the most capable traditional-code tier. Full device lifecycle: artifact generation, lab validation, production push, verification, rollback, and record keeping. All implemented in Python with no external orchestration platform required.
+>
+> See also: [No-Code (Tines)](../nocode_solution/) | [Low-Code (Prefect + Infrahub)](../lowcode_solution/) | [AI (MCP + LLM)](../ai_solution/)
 
 ## Overview
 
@@ -13,7 +17,7 @@ The solution is built around a single orchestrator script (`update_basic_srvs_po
 | Step | Activity | Framework Block | Implementation |
 |------|----------|----------------|----------------|
 | 1 | Document the required change and scope | INTENT | Git commit to YAML definitions (`acl_aerleon/def/`) |
-| 2 | Trigger | ORCHESTRATION / PRESENTATION | `python update_basic_srvs_pol.py --location <LOCATION>` |
+| 2 | Trigger | ORCHESTRATION / PRESENTATION | `uv run python update_basic_srvs_pol.py --location <LOCATION>` |
 | 3 | Build configuration artifact | INTENT | Jinja2 template render **or** aerleon `aclgen` |
 | 4 | Quantify impact | OBSERVABILITY | Read `scope`/`service_impact` blocks from YAML definitions |
 | 5 | Check and document current state | OBSERVABILITY | Netmiko — `show running-config | section interface Vlan`, `show ip access-lists` |
@@ -118,8 +122,9 @@ This solution was deliberately designed to use version-controlled YAML files as 
 **What this gives you:**
 - Every change to policy intent is a Git commit with a timestamp, author, and message
 - Diffs are human-readable — you can see exactly which server was added or removed
-- The same files drive all four solution variants (pro code, low code, no code, AI) without duplication
 - No additional infrastructure required — just a text editor and a Git client
+
+> **Note:** The low-code and AI solution tiers have moved intent into **Infrahub**, using InfraDevice nodes as the source of truth rather than these YAML files. The pro-code solution retains the YAML approach as the most self-contained option — no external services required.
 
 **What this does not give you:**
 - Fine-grained access control — anyone with write access to the repo can change any file
@@ -141,6 +146,7 @@ Policy intent can be stored at many levels of maturity. The options below are or
 
 | Platform | Best for | Integration change |
 |---|---|---|
+| **Infrahub** | Network CMDB with branch-and-merge change management, webhooks, GraphQL API | Replace `load_definitions()` with a GraphQL query to Infrahub — see [`lowcode_solution/`](../lowcode_solution/) for a working implementation |
 | **NetBox / Nautobot** | IP addresses, prefixes, server records, services | Replace `load_definitions()` with an API call to `/api/ipam/` or `/api/dcim/` |
 | **Infoblox / BlueCat** | DNS records, DHCP scopes, IPAM | Pull server addresses via the WAPI REST API |
 | **Cisco NSO** | Service models, device config intent | Read from NSO service instances via RESTCONF |
@@ -424,6 +430,26 @@ Only L3 devices (by role resolution above) are included. Within those devices, o
 - No dead code, no pass-through shims.
 - All output files written to `output/` with timestamps in filenames.
 - Each module includes a `main()` stub and `if __name__ == "__main__"` block.
+
+---
+
+## How This Tier Compares
+
+| Capability | Pro-Code (this solution) | Low-Code (Prefect + Infrahub) | AI (MCP + LLM) |
+|---|---|---|---|
+| Trigger | Manual CLI | Infrahub Proposed Change merge webhook | Natural language |
+| Source of truth | YAML files in Git | Infrahub InfraDevice nodes | Infrahub via MCP |
+| ACL generation | Jinja2 / aerleon | Jinja2 / aerleon | AI-generated |
+| Observability | Netmiko + TextFSM | None (stubbed) | SuzieQ via MCP |
+| Lab validation | ContainerLab + Netmiko | Stubbed | AI-assisted via MCP |
+| Device push | Netmiko | Stubbed | Netmiko via MCP |
+| Rollback | Smart per-device rollback | Not implemented | AI-reasoned |
+| Change record | JSON + ticket narrative text | Prefect run log | AI-drafted |
+| Programming required | Python | Minimal | None |
+
+**What this tier gives you that lower tiers do not:** full device lifecycle — lab validation, production push, verification, rollback, and structured output files — all in a single run. Every step is explicit, auditable, and debuggable.
+
+**What the AI tier adds on top:** the AI can query live network state via SuzieQ MCP before and after the change, reason about whether the result looks correct, and adapt to unexpected conditions without requiring code changes.
 
 ---
 
