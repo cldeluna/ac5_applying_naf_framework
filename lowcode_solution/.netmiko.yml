@@ -1,0 +1,17 @@
+DEVICES:
+  - core01
+  - access01
+
+core01:
+  host: 74.208.184.140
+  port: 20515
+  device_type: arista_eos
+  username: cisco
+  password: cisco
+
+access01:
+  host: 74.208.184.140
+  port: 20516
+  device_type: arista_eos
+  username: cisco
+  password: cisco
