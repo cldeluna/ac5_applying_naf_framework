@@ -1,5 +1,7 @@
 # Low-Code Solution: NAF ACL Lifecycle with Prefect and Infrahub
 
+> **Work in Progress** — This solution is actively being developed. Content and implementation details are subject to change.
+
 ## Overview
 
 This solution replaces the manual `python update_basic_srvs_pol.py` trigger from the pro-code solution with an event-driven pipeline. Infrahub is the single source of truth for DHCP server data. When a Proposed Change is merged in Infrahub, a webhook fires and Prefect runs the full 12-step ACL lifecycle workflow automatically.

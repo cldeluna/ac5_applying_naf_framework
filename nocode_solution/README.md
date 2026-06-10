@@ -1,5 +1,7 @@
 # No-Code Solution: NAF ACL Lifecycle with Tines
 
+> **Work in Progress** — This solution is actively being developed. Content and implementation details are subject to change.
+
 ## Overview
 
 This solution demonstrates the NAF ACL lifecycle workflow using **Tines** as the no-code orchestration platform. Tines is a security automation tool that lets you build workflows — called Stories — using a visual drag-and-drop canvas with no programming required.
